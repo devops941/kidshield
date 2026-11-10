@@ -627,6 +627,24 @@ exports.approveApp = async (req, res, next) => {
       { $pull: { blockedPackageNames: packageName } }
     );
 
+    const child = await Child.findById(req.params.childId);
+    const appDisplayName = app.appName || packageName;
+
+    // Create notification for child device
+    if (child) {
+      await Notification.create({
+        parentId: child.parentId,
+        childId: child._id,
+        childName: child.name,
+        type: 'appApproved',
+        target: 'child',
+        severity: 'info',
+        title: '✅ App Approved by Parent',
+        message: `Your parent approved "${appDisplayName}". You can now open and use it freely.`,
+        metadata: { packageName, appName: appDisplayName },
+      });
+    }
+
     res.status(200).json({ success: true, message: 'App approved successfully', app });
   } catch (error) {
     next(error);
@@ -653,6 +671,24 @@ exports.rejectApp = async (req, res, next) => {
       { childId: req.params.childId },
       { $addToSet: { blockedPackageNames: packageName } }
     );
+
+    const child = await Child.findById(req.params.childId);
+    const appDisplayName = app.appName || packageName;
+
+    // Create notification for child device
+    if (child) {
+      await Notification.create({
+        parentId: child.parentId,
+        childId: child._id,
+        childName: child.name,
+        type: 'appRejected',
+        target: 'child',
+        severity: 'warning',
+        title: '🚫 App Restricted by Parent',
+        message: `Your parent restricted "${appDisplayName}". Access to this app is locked.`,
+        metadata: { packageName, appName: appDisplayName },
+      });
+    }
 
     res.status(200).json({ success: true, message: 'App rejected and blocked from child use', app });
   } catch (error) {

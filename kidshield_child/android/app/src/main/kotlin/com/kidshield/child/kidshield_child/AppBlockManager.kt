@@ -229,11 +229,28 @@ object AppBlockManager {
                             }
                         }
                         updateBlockedPackages(context, set)
-                        mainHandler.post {
-                            onComplete?.invoke(true)
-                        }
-                        return@execute
                     }
+
+                    // Check for unread parent notices (app approvals or rejections)
+                    val noticesArr = json.optJSONArray("notices")
+                    if (noticesArr != null && noticesArr.length() > 0) {
+                        for (i in 0 until noticesArr.length()) {
+                            val notice = noticesArr.optJSONObject(i) ?: continue
+                            val id = notice.optString("_id")
+                            val title = notice.optString("title", "Parent Notification")
+                            val message = notice.optString("message", "")
+                            val type = notice.optString("type")
+                            showChildSystemNotification(context, id, title, message, type)
+                            if (id.isNotEmpty()) {
+                                markNoticeRead(baseUrl, id)
+                            }
+                        }
+                    }
+
+                    mainHandler.post {
+                        onComplete?.invoke(true)
+                    }
+                    return@execute
                 }
                 conn.disconnect()
             } catch (e: Exception) {
@@ -243,6 +260,65 @@ object AppBlockManager {
                 onComplete?.invoke(false)
             }
         }
+    }
+
+    fun showChildSystemNotification(context: Context, id: String, title: String, message: String, type: String) {
+        try {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+            val channelId = "kidshield_parent_notices_channel"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    channelId,
+                    "Parent Safety Notices",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Notices from parents regarding app approvals and restrictions"
+                    enableLights(true)
+                    enableVibration(true)
+                }
+                nm.createNotificationChannel(channel)
+            }
+
+            val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            val pendingIntent = if (launchIntent != null) {
+                PendingIntent.getActivity(
+                    context,
+                    id.hashCode(),
+                    launchIntent,
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT else PendingIntent.FLAG_UPDATE_CURRENT
+                )
+            } else null
+
+            val notif = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(title)
+                .setContentText(message)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .apply {
+                    if (pendingIntent != null) setContentIntent(pendingIntent)
+                }
+                .build()
+
+            nm.notify(id.hashCode(), notif)
+            Log.i(TAG, "🔔 Displayed Parent Notice to child: $title - $message")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to show child system notification: ${e.message}")
+        }
+    }
+
+    private fun markNoticeRead(baseUrl: String, noticeId: String) {
+        try {
+            val endpoint = URL("${baseUrl.trimEnd('/')}/notifications/child/$noticeId/read")
+            val conn = (endpoint.openConnection() as HttpURLConnection).apply {
+                requestMethod = "PUT"
+                connectTimeout = 5000
+                readTimeout = 5000
+            }
+            conn.responseCode
+            conn.disconnect()
+        } catch (_: Exception) {}
     }
 }
 

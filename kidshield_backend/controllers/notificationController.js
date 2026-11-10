@@ -54,3 +54,47 @@ exports.markAllAsRead = async (req, res, next) => {
   }
 };
 
+// @desc    Get notices / notifications for child device
+// @route   GET /api/notifications/child/:childId
+// @access  Public (Child Device)
+exports.getChildNotifications = async (req, res, next) => {
+  try {
+    const { childId } = req.params;
+    const notifications = await Notification.find({
+      childId,
+      target: 'child',
+    }).sort({ timestamp: -1 }).limit(50);
+
+    const unreadCount = await Notification.countDocuments({
+      childId,
+      target: 'child',
+      isRead: false,
+    });
+
+    res.status(200).json({
+      success: true,
+      count: notifications.length,
+      unreadCount,
+      notifications,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Mark child notification as read
+// @route   PUT /api/notifications/child/:id/read
+// @access  Public (Child Device)
+exports.markChildNotificationRead = async (req, res, next) => {
+  try {
+    const notification = await Notification.findByIdAndUpdate(
+      req.params.id,
+      { isRead: true },
+      { new: true }
+    );
+    res.status(200).json({ success: true, notification });
+  } catch (error) {
+    next(error);
+  }
+};
+

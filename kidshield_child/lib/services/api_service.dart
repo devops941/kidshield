@@ -190,4 +190,22 @@ class ApiService {
       return false;
     }
   }
+
+  // 8. GET NOTICES FOR CHILD
+  Future<List<Map<String, dynamic>>> getChildNotifications(String childId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/notifications/child/$childId'),
+        headers: _headers,
+      ).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final list = data['notifications'] as List?;
+        if (list != null) {
+          return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+      }
+    } catch (_) {}
+    return [];
+  }
 }

@@ -1,5 +1,6 @@
 const Restriction = require('../models/Restriction');
 const Child = require('../models/Child');
+const Notification = require('../models/Notification');
 
 // @desc    Get restrictions for a child
 // @route   GET /api/restrictions/:childId
@@ -11,7 +12,15 @@ exports.getRestrictions = async (req, res, next) => {
       // Create defaults
       restrictions = await Restriction.create({ childId: req.params.childId });
     }
-    res.status(200).json({ success: true, restrictions });
+
+    // Fetch unread notices for child device (e.g. app approved or rejected by parent)
+    const childNotices = await Notification.find({
+      childId: req.params.childId,
+      target: 'child',
+      isRead: false,
+    }).sort({ timestamp: -1 }).limit(5);
+
+    res.status(200).json({ success: true, restrictions, notices: childNotices });
   } catch (error) {
     next(error);
   }

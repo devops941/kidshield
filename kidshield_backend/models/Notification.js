@@ -22,6 +22,8 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       enum: [
         'appInstalled',
+        'appApproved',
+        'appRejected',
         'screenTimeLimit',
         'locationDisabled',
         'deviceOffline',
@@ -32,6 +34,12 @@ const notificationSchema = new mongoose.Schema(
         'general',
       ],
       default: 'general',
+    },
+    target: {
+      type: String,
+      enum: ['parent', 'child', 'all'],
+      default: 'parent',
+      index: true,
     },
     severity: {
       type: String,
