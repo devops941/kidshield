@@ -13,6 +13,7 @@ class UsageSyncService {
   int _screenTimeMinutesToday = 0;
   int _screenTimeMinutesWeekly = 0;
   int _screenTimeMinutesMonthly = 0;
+  List<int> _hourlyBreakdown = [];
   String _date = '';
   String _timezone = 'Asia/Kolkata';
 
@@ -23,6 +24,7 @@ class UsageSyncService {
   int get screenTimeMinutesToday => _screenTimeMinutesToday;
   int get screenTimeMinutesWeekly => _screenTimeMinutesWeekly;
   int get screenTimeMinutesMonthly => _screenTimeMinutesMonthly;
+  List<int> get hourlyBreakdown => _hourlyBreakdown;
   String get date => _date;
   String get timezone => _timezone;
 
@@ -55,6 +57,7 @@ class UsageSyncService {
         _screenTimeMinutesMonthly = (usageRes['totalMinutesMonthly'] as int?) ?? 0;
         _date = usageRes['date']?.toString() ?? '';
         _timezone = usageRes['timezone']?.toString() ?? 'Asia/Kolkata';
+        _hourlyBreakdown = (usageRes['hourlyBreakdown'] as List?)?.map((v) => (v as num).toInt()).toList() ?? [];
 
         _todayApps = (usageRes['todayApps'] as List?)?.cast<Map<dynamic, dynamic>>().map((item) => {
           'packageName': item['packageName']?.toString() ?? '',
@@ -136,6 +139,7 @@ class UsageSyncService {
           date: _date.isNotEmpty ? _date : null,
           timezone: _timezone,
           totalMinutesToday: _screenTimeMinutesToday,
+          hourlyBreakdown: _hourlyBreakdown,
         );
       }
     } catch (_) {}

@@ -51,6 +51,7 @@ class MonitoringProvider extends ChangeNotifier {
   int? _backendTotalMinutesToday;
   int? _backendTotalMinutesWeekly;
   int? _backendTotalMinutesMonthly;
+  List<double> _backendTodayHourlyBreakdown = [];
   List<double> _backendWeeklyBreakdown = [];
   List<double> _backendMonthlyBreakdown = [];
 
@@ -85,31 +86,49 @@ class MonitoringProvider extends ChangeNotifier {
     final todayMinutes = totalScreenTimeMinutesToday.toDouble();
     if (todayMinutes <= 0) return List<double>.filled(6, 0.0);
 
-    // 6 time blocks: 6 AM, 9 AM, 12 PM, 3 PM, 6 PM, 9 PM
-    final currentHour = DateTime.now().hour;
-    int elapsedBlocks = 1;
-    if (currentHour < 9) {
-      elapsedBlocks = 1;
-    } else if (currentHour < 12) {
-      elapsedBlocks = 2;
-    } else if (currentHour < 15) {
-      elapsedBlocks = 3;
-    } else if (currentHour < 18) {
-      elapsedBlocks = 4;
-    } else if (currentHour < 21) {
-      elapsedBlocks = 5;
-    } else {
-      elapsedBlocks = 6;
+    if (_backendTodayHourlyBreakdown.isNotEmpty && _backendTodayHourlyBreakdown.length == 6) {
+      final sum = _backendTodayHourlyBreakdown.fold<double>(0.0, (s, v) => s + v);
+      if (sum > 0) return _backendTodayHourlyBreakdown;
     }
 
+    // Real mapping from apps' actual lastUsed timestamps
     final result = List<double>.filled(6, 0.0);
-    final base = (todayMinutes / elapsedBlocks).roundToDouble();
-    double allocated = 0;
-    for (int i = 0; i < elapsedBlocks - 1; i++) {
-      result[i] = base;
-      allocated += base;
+    final activeApps = _appUsage
+        .where((a) => !MonitoringService.isExcludedApp(a.packageName, a.appName) && a.usageMinutesToday > 0)
+        .toList();
+
+    if (activeApps.isNotEmpty) {
+      for (final app in activeApps) {
+        final hour = app.lastUsed.hour;
+        final int blockIdx = (hour < 9)
+            ? 0
+            : (hour < 12)
+                ? 1
+                : (hour < 15)
+                    ? 2
+                    : (hour < 18)
+                        ? 3
+                        : (hour < 21)
+                            ? 4
+                            : 5;
+        result[blockIdx] += app.usageMinutesToday.toDouble();
+      }
+    } else {
+      final hour = DateTime.now().hour;
+      final int blockIdx = (hour < 9)
+          ? 0
+          : (hour < 12)
+              ? 1
+              : (hour < 15)
+                  ? 2
+                  : (hour < 18)
+                      ? 3
+                      : (hour < 21)
+                          ? 4
+                          : 5;
+      result[blockIdx] = todayMinutes;
     }
-    result[elapsedBlocks - 1] = (todayMinutes - allocated).clamp(0.0, 1440.0);
+
     return result;
   }
 
@@ -188,6 +207,11 @@ class MonitoringProvider extends ChangeNotifier {
         }
         if (payload['monthlyBreakdown'] != null && payload['monthlyBreakdown']['values'] is List) {
           _backendMonthlyBreakdown = (payload['monthlyBreakdown']['values'] as List)
+              .map((v) => (v as num).toDouble())
+              .toList();
+        }
+        if (payload['todayHourlyBreakdown'] != null && payload['todayHourlyBreakdown']['values'] is List) {
+          _backendTodayHourlyBreakdown = (payload['todayHourlyBreakdown']['values'] as List)
               .map((v) => (v as num).toDouble())
               .toList();
         }

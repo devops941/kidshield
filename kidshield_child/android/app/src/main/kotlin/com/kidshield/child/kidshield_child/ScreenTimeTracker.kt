@@ -112,7 +112,8 @@ object ScreenTimeTracker {
         val totalMinutesMonthly: Int,
         val todayApps: List<Map<String, Any>>,
         val weeklyApps: List<Map<String, Any>>,
-        val monthlyApps: List<Map<String, Any>>
+        val monthlyApps: List<Map<String, Any>>,
+        val hourlyBreakdown: List<Int> = emptyList()
     )
 
     /**
@@ -368,6 +369,32 @@ object ScreenTimeTracker {
         totalMinutesWeekly = Math.max(totalMinutesWeekly, totalMinutesToday)
         totalMinutesMonthly = Math.max(totalMinutesMonthly, totalMinutesWeekly)
 
+        // 6b. Calculate exact 6-block hourly breakdown from interactive intervals
+        val hourlyBuckets = IntArray(6) { 0 }
+        val blockBoundaries = arrayOf(
+            Pair(todayStart, todayStart + 9 * 3600000L),
+            Pair(todayStart + 9 * 3600000L, todayStart + 12 * 3600000L),
+            Pair(todayStart + 12 * 3600000L, todayStart + 15 * 3600000L),
+            Pair(todayStart + 15 * 3600000L, todayStart + 18 * 3600000L),
+            Pair(todayStart + 18 * 3600000L, todayStart + 21 * 3600000L),
+            Pair(todayStart + 21 * 3600000L, todayStart + 24 * 3600000L)
+        )
+        for (interval in mergedIntervals) {
+            for (b in 0 until 6) {
+                val oStart = Math.max(interval.startTime, blockBoundaries[b].first)
+                val oEnd = Math.min(interval.endTime, blockBoundaries[b].second)
+                if (oEnd > oStart) {
+                    hourlyBuckets[b] += ((oEnd - oStart) / 60000L).toInt()
+                }
+            }
+        }
+        val hSum = hourlyBuckets.sum()
+        if (hSum < totalMinutesToday) {
+            val curHour = Calendar.getInstance(REPORTING_TIMEZONE).apply { timeInMillis = now }.get(Calendar.HOUR_OF_DAY)
+            val curBlock = if (curHour < 9) 0 else if (curHour < 12) 1 else if (curHour < 15) 2 else if (curHour < 18) 3 else if (curHour < 21) 4 else 5
+            hourlyBuckets[curBlock] += (totalMinutesToday - hSum)
+        }
+
         val report = ScreenTimeReport(
             date = dateKey,
             timezone = "Asia/Kolkata",
@@ -376,7 +403,8 @@ object ScreenTimeTracker {
             totalMinutesMonthly = totalMinutesMonthly,
             todayApps = todayApps,
             weeklyApps = weeklyApps,
-            monthlyApps = monthlyApps
+            monthlyApps = monthlyApps,
+            hourlyBreakdown = hourlyBuckets.toList()
         )
 
         // Save locally for offline reliability
@@ -496,12 +524,16 @@ object ScreenTimeTracker {
                 appsArray.put(appObj)
             }
 
+            val hourlyArray = JSONArray()
+            for (h in report.hourlyBreakdown) hourlyArray.put(h)
+
             val payload = JSONObject().apply {
                 put("childId", childId)
                 put("date", report.date)
                 put("timezone", report.timezone)
                 put("totalMinutesToday", report.totalMinutesToday)
                 put("usageData", appsArray)
+                put("hourlyBreakdown", hourlyArray)
             }
 
             val endpoint = URL("$baseUrl/app-usage/sync")

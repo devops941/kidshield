@@ -79,7 +79,14 @@ function getDefaultTopApps(childId) {
 // @access  Public (Child Device)
 exports.syncAppUsage = async (req, res, next) => {
   try {
-    const { childId, usageData, date, timezone, totalMinutesToday: incomingTotalMinutes } = req.body;
+    const {
+      childId,
+      usageData,
+      date,
+      timezone,
+      totalMinutesToday: incomingTotalMinutes,
+      hourlyBreakdown: incomingHourlyBreakdown,
+    } = req.body;
 
     if (!childId || !Array.isArray(usageData)) {
       return res.status(400).json({ success: false, message: 'Please provide childId and usageData array' });
@@ -115,23 +122,28 @@ exports.syncAppUsage = async (req, res, next) => {
     }
 
     // 1. Idempotently upsert date-partitioned DailyActivity record with valid apps only
+    const dailyUpdate = {
+      childId,
+      date: recordDate,
+      timezone: tz,
+      totalScreenTimeMinutes: totalMinutesToday,
+      appBreakdown: validUsageData.map((item) => ({
+        packageName: item.packageName,
+        appName: item.appName || item.packageName,
+        category: item.category || 'General',
+        icon: item.icon || '',
+        usageMinutes: item.usageMinutesToday || 0,
+        launchCount: item.launchCountToday || 0,
+      })),
+      lastSyncedAt: new Date(),
+    };
+    if (Array.isArray(incomingHourlyBreakdown) && incomingHourlyBreakdown.length === 6) {
+      dailyUpdate.hourlyBreakdown = incomingHourlyBreakdown;
+    }
+
     await DailyActivity.findOneAndUpdate(
       { childId, date: recordDate },
-      {
-        childId,
-        date: recordDate,
-        timezone: tz,
-        totalScreenTimeMinutes: totalMinutesToday,
-        appBreakdown: validUsageData.map((item) => ({
-          packageName: item.packageName,
-          appName: item.appName || item.packageName,
-          category: item.category || 'General',
-          icon: item.icon || '',
-          usageMinutes: item.usageMinutesToday || 0,
-          launchCount: item.launchCountToday || 0,
-        })),
-        lastSyncedAt: new Date(),
-      },
+      dailyUpdate,
       { upsert: true, new: true }
     );
 
@@ -321,12 +333,51 @@ exports.getAppUsage = async (req, res, next) => {
       monthlyValues[3] = totalMinutesWeekly;
     }
 
+    // Calculate real 6-block hourly breakdown for today (6 AM, 9 AM, 12 PM, 3 PM, 6 PM, 9 PM)
+    const hourlyValues = [0, 0, 0, 0, 0, 0];
+    if (dailyRecord && Array.isArray(dailyRecord.hourlyBreakdown) && dailyRecord.hourlyBreakdown.length === 6) {
+      for (let i = 0; i < 6; i++) {
+        hourlyValues[i] = dailyRecord.hourlyBreakdown[i] || 0;
+      }
+    } else {
+      for (const item of sanitizedUsage) {
+        if ((item.usageMinutesToday || 0) > 0) {
+          const usedDate = item.lastUsed ? new Date(item.lastUsed) : new Date();
+          let hour = 15;
+          try {
+            const hourStr = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false }).format(usedDate);
+            hour = parseInt(hourStr, 10);
+          } catch (_) {
+            hour = usedDate.getHours();
+          }
+          const blockIdx = hour < 9 ? 0 : hour < 12 ? 1 : hour < 15 ? 2 : hour < 18 ? 3 : hour < 21 ? 4 : 5;
+          hourlyValues[blockIdx] += (item.usageMinutesToday || 0);
+        }
+      }
+      const hSum = hourlyValues.reduce((s, v) => s + v, 0);
+      if (hSum < totalMinutesToday) {
+        let curHour = 15;
+        try {
+          const curHourStr = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false }).format(new Date());
+          curHour = parseInt(curHourStr, 10);
+        } catch (_) {
+          curHour = new Date().getHours();
+        }
+        const curBlock = curHour < 9 ? 0 : curHour < 12 ? 1 : curHour < 15 ? 2 : curHour < 18 ? 3 : curHour < 21 ? 4 : 5;
+        hourlyValues[curBlock] += (totalMinutesToday - hSum);
+      }
+    }
+
     res.status(200).json({
       success: true,
       date: targetDate,
       totalMinutesToday,
       totalMinutesWeekly,
       totalMinutesMonthly,
+      todayHourlyBreakdown: {
+        labels: ['6 AM', '9 AM', '12 PM', '3 PM', '6 PM', '9 PM'],
+        values: hourlyValues,
+      },
       weeklyBreakdown: {
         labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         values: weeklyValues,

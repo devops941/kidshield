@@ -523,6 +523,7 @@ class MainActivity : FlutterActivity() {
                     put("weeklyApps", report.weeklyApps)
                     put("monthlyApps", report.monthlyApps)
                     put("apps", report.todayApps)
+                    put("hourlyBreakdown", report.hourlyBreakdown)
                     put("batteryLevel", getBatteryPercentage())
                 }
 

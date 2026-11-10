@@ -108,6 +108,7 @@ class ApiService {
     String? date,
     String? timezone,
     int? totalMinutesToday,
+    List<int>? hourlyBreakdown,
   }) async {
     try {
       final body = <String, dynamic>{
@@ -117,6 +118,7 @@ class ApiService {
       if (date != null && date.isNotEmpty) body['date'] = date;
       if (timezone != null && timezone.isNotEmpty) body['timezone'] = timezone;
       if (totalMinutesToday != null) body['totalMinutesToday'] = totalMinutesToday;
+      if (hourlyBreakdown != null) body['hourlyBreakdown'] = hourlyBreakdown;
 
       final response = await http.post(
         Uri.parse('$baseUrl/app-usage/sync'),
