@@ -347,6 +347,19 @@ class ApiService {
     }
   }
 
+  Future<List<dynamic>> getDailyActivityHistory(String childId, {int limit = 14}) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/app-usage/$childId/daily-history?limit=$limit'),
+        headers: _headers,
+      ).timeout(const Duration(seconds: 4));
+      final data = jsonDecode(response.body);
+      return data['records'] ?? [];
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<List<dynamic>> getInstalledApps(String childId) async {
     try {
       final response = await http.get(

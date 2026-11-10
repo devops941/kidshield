@@ -48,14 +48,38 @@ class MonitoringProvider extends ChangeNotifier {
   int get unreadNotificationsCount =>
       _notifications.where((n) => !n.isRead).length;
 
-  int get totalScreenTimeMinutesToday =>
-      _appUsage.fold(0, (sum, item) => sum + item.usageMinutesToday);
+  int? _backendTotalMinutesToday;
+  int? _backendTotalMinutesWeekly;
+  int? _backendTotalMinutesMonthly;
+  List<double> _backendWeeklyBreakdown = [];
+  List<double> _backendMonthlyBreakdown = [];
 
-  int get totalScreenTimeMinutesWeekly =>
-      _appUsage.fold(0, (sum, item) => sum + item.usageMinutesWeekly);
+  int get totalScreenTimeMinutesToday {
+    if (_backendTotalMinutesToday != null) {
+      return _backendTotalMinutesToday!;
+    }
+    return _appUsage
+        .where((a) => !MonitoringService.isExcludedApp(a.packageName, a.appName))
+        .fold(0, (sum, item) => sum + item.usageMinutesToday);
+  }
 
-  int get totalScreenTimeMinutesMonthly =>
-      _appUsage.fold(0, (sum, item) => sum + item.usageMinutesMonthly);
+  int get totalScreenTimeMinutesWeekly {
+    if (_backendTotalMinutesWeekly != null) {
+      return _backendTotalMinutesWeekly!;
+    }
+    return _appUsage
+        .where((a) => !MonitoringService.isExcludedApp(a.packageName, a.appName))
+        .fold(0, (sum, item) => sum + item.usageMinutesWeekly);
+  }
+
+  int get totalScreenTimeMinutesMonthly {
+    if (_backendTotalMinutesMonthly != null) {
+      return _backendTotalMinutesMonthly!;
+    }
+    return _appUsage
+        .where((a) => !MonitoringService.isExcludedApp(a.packageName, a.appName))
+        .fold(0, (sum, item) => sum + item.usageMinutesMonthly);
+  }
 
   List<double> get todayHourlyMinutes {
     final todayMinutes = totalScreenTimeMinutesToday.toDouble();
@@ -90,50 +114,35 @@ class MonitoringProvider extends ChangeNotifier {
   }
 
   List<double> get weeklyScreenTimeMinutes {
+    if (_backendWeeklyBreakdown.isNotEmpty && _backendWeeklyBreakdown.length == 7) {
+      return _backendWeeklyBreakdown;
+    }
     final todayWeekday = DateTime.now().weekday; // 1 = Monday, 7 = Sunday
     final todayMinutes = totalScreenTimeMinutesToday.toDouble();
-
-    final totalWeeklyFromApps = _appUsage.fold<double>(
-      0.0,
-      (sum, item) => sum + item.usageMinutesWeekly.toDouble(),
-    );
-
     final days = List<double>.filled(7, 0.0);
     final todayIndex = (todayWeekday - 1).clamp(0, 6);
     days[todayIndex] = todayMinutes;
-
-    final pastDaysCount = todayIndex;
-    if (pastDaysCount > 0 && totalWeeklyFromApps > todayMinutes) {
-      final pastTotal = totalWeeklyFromApps - todayMinutes;
-      final avgPast = (pastTotal / pastDaysCount).clamp(0.0, 1440.0);
-      for (int i = 0; i < todayIndex; i++) {
-        days[i] = avgPast.roundToDouble();
-      }
-    }
     return days;
   }
 
   List<double> get monthlyWeeksScreenTimeMinutes {
-    final monthlyTotal = totalScreenTimeMinutesMonthly.toDouble();
-    final weeklyTotal = totalScreenTimeMinutesWeekly.toDouble();
-
+    if (_backendMonthlyBreakdown.isNotEmpty && _backendMonthlyBreakdown.length == 4) {
+      return _backendMonthlyBreakdown;
+    }
     final result = List<double>.filled(4, 0.0);
-    if (monthlyTotal <= 0) return result;
-
-    // Week 4 is the current week
-    result[3] = weeklyTotal;
-
-    final pastWeeksTotal = (monthlyTotal - weeklyTotal).clamp(0.0, 100000.0);
-    final pastWeekAvg = (pastWeeksTotal / 3).roundToDouble();
-    result[0] = pastWeekAvg;
-    result[1] = pastWeekAvg;
-    result[2] = (pastWeeksTotal - (pastWeekAvg * 2)).clamp(0.0, 100000.0);
+    result[3] = totalScreenTimeMinutesWeekly.toDouble();
     return result;
   }
 
   List<AppUsageModel> get topUsedApps {
-    final list = List<AppUsageModel>.from(_appUsage);
-    list.sort((a, b) => b.usageMinutesToday.compareTo(a.usageMinutesToday));
+    final list = _appUsage
+        .where((a) => !MonitoringService.isExcludedApp(a.packageName, a.appName))
+        .toList();
+    list.sort((a, b) {
+      final cmpToday = b.usageMinutesToday.compareTo(a.usageMinutesToday);
+      if (cmpToday != 0) return cmpToday;
+      return b.usageMinutesWeekly.compareTo(a.usageMinutesWeekly);
+    });
     return list.take(4).toList();
   }
 
@@ -153,6 +162,7 @@ class MonitoringProvider extends ChangeNotifier {
         _monitoringService.getRestrictions(childId),
         _monitoringService.getNotifications(childId),
         _monitoringService.getLocationHistory(childId),
+        _monitoringService.getAppUsageData(childId),
       ]);
 
       _currentLocation = results[0] as LocationModel?;
@@ -161,6 +171,29 @@ class MonitoringProvider extends ChangeNotifier {
       _restrictions = results[3] as RestrictionModel?;
       _notifications = results[4] as List<NotificationModel>;
       _locationHistory = results[5] as List<LocationModel>;
+
+      final payload = results[6] as Map<String, dynamic>;
+      if (payload.isNotEmpty) {
+        if (payload['totalMinutesToday'] != null) {
+          _backendTotalMinutesToday = (payload['totalMinutesToday'] as num).toInt();
+        }
+        if (payload['totalMinutesWeekly'] != null) {
+          _backendTotalMinutesWeekly = (payload['totalMinutesWeekly'] as num).toInt();
+        }
+        if (payload['totalMinutesMonthly'] != null) {
+          _backendTotalMinutesMonthly = (payload['totalMinutesMonthly'] as num).toInt();
+        }
+        if (payload['weeklyBreakdown'] != null && payload['weeklyBreakdown']['values'] is List) {
+          _backendWeeklyBreakdown = (payload['weeklyBreakdown']['values'] as List)
+              .map((v) => (v as num).toDouble())
+              .toList();
+        }
+        if (payload['monthlyBreakdown'] != null && payload['monthlyBreakdown']['values'] is List) {
+          _backendMonthlyBreakdown = (payload['monthlyBreakdown']['values'] as List)
+              .map((v) => (v as num).toDouble())
+              .toList();
+        }
+      }
     } catch (e) {
       _errorMessage = e.toString();
     } finally {

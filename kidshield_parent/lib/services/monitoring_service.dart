@@ -48,12 +48,35 @@ class MonitoringService {
     );
   }
 
+  static bool isExcludedApp(String packageName, String appName) {
+    if (packageName.isEmpty) return true;
+    final p = packageName.toLowerCase();
+    final n = appName.toLowerCase();
+    return p.contains('launcher') ||
+        p.contains('systemui') ||
+        p.contains('honeyboard') ||
+        p.contains('inputmethod') ||
+        p.contains('kidshield') ||
+        n.contains('one ui home') ||
+        n.contains('launcher') ||
+        n.contains('system ui');
+  }
+
+  Future<Map<String, dynamic>> getAppUsageData(String childId) async {
+    try {
+      return await _api.getAppUsage(childId);
+    } catch (_) {
+      return {};
+    }
+  }
+
   Future<List<AppUsageModel>> getAppUsage(String childId) async {
     try {
       final res = await _api.getAppUsage(childId);
       if (res['usage'] != null && (res['usage'] as List).isNotEmpty) {
         return (res['usage'] as List)
             .map((item) => AppUsageModel.fromMap(item as Map<String, dynamic>))
+            .where((item) => !isExcludedApp(item.packageName, item.appName))
             .toList();
       }
     } catch (_) {}

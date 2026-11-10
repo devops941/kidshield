@@ -12,6 +12,54 @@ const { sendPushNotification } = require('../config/firebaseAdmin');
 const demoUsageStore = new Map();
 const demoInstalledAppsStore = new Map();
 
+// Known system launchers, desktop shells, and internal services excluded from child leisure screen time
+const EXCLUDED_PACKAGES = new Set([
+  'com.sec.android.app.launcher', // Samsung One UI Home
+  'com.google.android.apps.nexuslauncher', // Pixel Launcher
+  'com.android.launcher',
+  'com.android.launcher3',
+  'com.mi.android.globallauncher',
+  'com.miui.home',
+  'com.oppo.launcher',
+  'com.coloros.launcher',
+  'com.vivo.launcher',
+  'com.bbk.launcher2',
+  'com.huawei.android.launcher',
+  'com.oneplus.launcher',
+  'com.teslacoilsw.launcher',
+  'com.android.systemui',
+  'com.google.android.gms',
+  'com.google.android.googlequicksearchbox',
+  'com.google.android.inputmethod.latin',
+  'com.samsung.android.honeyboard',
+  'com.sec.android.inputmethod',
+  'com.google.android.permissioncontroller',
+  'com.android.permissioncontroller',
+  'com.kidshield.parent.kidshield_parent',
+  'com.kidshield.child.kidshield_child',
+]);
+
+function isExcludedApp(packageName, appName = '') {
+  if (!packageName) return true;
+  if (EXCLUDED_PACKAGES.has(packageName)) return true;
+  const pkg = packageName.toLowerCase();
+  const name = (appName || '').toLowerCase();
+  if (
+    pkg.includes('launcher') ||
+    pkg.includes('systemui') ||
+    pkg.includes('honeyboard') ||
+    pkg.includes('inputmethod') ||
+    pkg.includes('kidshield') ||
+    name.includes('one ui home') ||
+    name.includes('launcher') ||
+    name.includes('system ui') ||
+    name.includes('honeyboard')
+  ) {
+    return true;
+  }
+  return false;
+}
+
 // Helper to get formatted local date (YYYY-MM-DD) in specified timezone
 function getLocalDateString(timeZone = 'Asia/Kolkata', date = new Date()) {
   try {
@@ -40,17 +88,20 @@ exports.syncAppUsage = async (req, res, next) => {
     const tz = timezone || 'Asia/Kolkata';
     const recordDate = date || getLocalDateString(tz);
 
-    // Calculate or use accurate incoming non-overlapping device screen time
-    let totalMinutesToday = 0;
-    if (typeof incomingTotalMinutes === 'number' && incomingTotalMinutes >= 0) {
-      totalMinutesToday = incomingTotalMinutes;
-    } else {
-      totalMinutesToday = usageData.reduce((sum, item) => sum + (item.usageMinutesToday || 0), 0);
+    // Filter out system launchers and excluded apps from active screen time
+    const validUsageData = usageData.filter((item) => !isExcludedApp(item.packageName, item.appName));
+
+    // Calculate accurate non-overlapping device screen time strictly from valid apps
+    let totalMinutesToday = validUsageData.reduce((sum, item) => sum + (item.usageMinutesToday || 0), 0);
+    if (typeof incomingTotalMinutes === 'number' && incomingTotalMinutes >= 0 && incomingTotalMinutes < 1440) {
+      if (incomingTotalMinutes <= totalMinutesToday) {
+        totalMinutesToday = incomingTotalMinutes;
+      }
     }
 
     // Handle non-ObjectId or demo children
     if (!mongoose.Types.ObjectId.isValid(childId)) {
-      demoUsageStore.set(childId, usageData);
+      demoUsageStore.set(childId, validUsageData);
       return res.status(200).json({
         success: true,
         message: 'App usage synced (demo profile)',
@@ -64,7 +115,7 @@ exports.syncAppUsage = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Child not found' });
     }
 
-    // 1. Idempotently upsert date-partitioned DailyActivity record
+    // 1. Idempotently upsert date-partitioned DailyActivity record with valid apps only
     await DailyActivity.findOneAndUpdate(
       { childId, date: recordDate },
       {
@@ -72,7 +123,7 @@ exports.syncAppUsage = async (req, res, next) => {
         date: recordDate,
         timezone: tz,
         totalScreenTimeMinutes: totalMinutesToday,
-        appBreakdown: usageData.map((item) => ({
+        appBreakdown: validUsageData.map((item) => ({
           packageName: item.packageName,
           appName: item.appName || item.packageName,
           category: item.category || 'General',
@@ -86,7 +137,7 @@ exports.syncAppUsage = async (req, res, next) => {
     );
 
     // 2. Update AppUsage collection for backwards compatibility with existing Parent UI
-    for (const item of usageData) {
+    for (const item of validUsageData) {
       await AppUsage.findOneAndUpdate(
         { childId, packageName: item.packageName },
         {
@@ -154,12 +205,23 @@ exports.getAppUsage = async (req, res, next) => {
     const targetDate = queryDate || getLocalDateString(tz);
 
     if (!mongoose.Types.ObjectId.isValid(childId)) {
-      const demo = demoUsageStore.get(childId) || getDefaultTopApps(childId);
+      const demo = (demoUsageStore.get(childId) || getDefaultTopApps(childId))
+        .filter((item) => !isExcludedApp(item.packageName, item.appName));
       const totalMinutesToday = demo.reduce((sum, item) => sum + (item.usageMinutesToday || 0), 0);
       return res.status(200).json({
         success: true,
         date: targetDate,
         totalMinutesToday,
+        totalMinutesWeekly: totalMinutesToday * 3,
+        totalMinutesMonthly: totalMinutesToday * 10,
+        weeklyBreakdown: {
+          labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+          values: [0, totalMinutesToday, 0, 0, 0, 0, 0],
+        },
+        monthlyBreakdown: {
+          labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+          values: [0, 0, 0, totalMinutesToday],
+        },
         count: demo.length,
         usage: demo,
       });
@@ -170,17 +232,24 @@ exports.getAppUsage = async (req, res, next) => {
 
     let usage = await AppUsage.find({ childId }).sort({ usageMinutesToday: -1 });
 
-    // 2. Strict midnight boundary: Never carry over yesterday's numbers into today's total
-    let totalMinutesToday = 0;
-    if (dailyRecord) {
-      totalMinutesToday = dailyRecord.totalScreenTimeMinutes;
-    } else {
-      totalMinutesToday = usage.reduce((sum, item) => {
-        if (item.lastSyncDate === targetDate) {
-          return sum + (item.usageMinutesToday || 0);
-        }
-        return sum;
-      }, 0);
+    // Filter out excluded launcher/system packages
+    usage = usage.filter((item) => !isExcludedApp(item.packageName, item.appName));
+
+    // 2. Calculate real today total from active apps
+    let totalMinutesToday = usage.reduce((sum, item) => {
+      if (item.lastSyncDate === targetDate) {
+        return sum + (item.usageMinutesToday || 0);
+      }
+      return sum;
+    }, 0);
+
+    if (dailyRecord && dailyRecord.totalScreenTimeMinutes > 0) {
+      const validInRecord = (dailyRecord.appBreakdown || [])
+        .filter((a) => !isExcludedApp(a.packageName, a.appName))
+        .reduce((sum, a) => sum + (a.usageMinutes || 0), 0);
+      if (validInRecord > 0) {
+        totalMinutesToday = validInRecord;
+      }
     }
 
     // 3. Sanitize individual apps: If an app has not been synced today, its usageMinutesToday is 0
@@ -194,8 +263,51 @@ exports.getAppUsage = async (req, res, next) => {
       return obj;
     });
 
-    const totalMinutesWeekly = usage.reduce((sum, item) => sum + (item.usageMinutesWeekly || 0), 0);
-    const totalMinutesMonthly = usage.reduce((sum, item) => sum + (item.usageMinutesMonthly || 0), 0);
+    const totalMinutesWeekly = sanitizedUsage.reduce((sum, item) => sum + (item.usageMinutesWeekly || 0), 0);
+    const totalMinutesMonthly = sanitizedUsage.reduce((sum, item) => sum + (item.usageMinutesMonthly || 0), 0);
+
+    // 4. Fetch real past 30 days DailyActivity records to build exact Monday-Sunday and 4-week breakdowns
+    const pastRecords = await DailyActivity.find({ childId }).sort({ date: 1 });
+    const recordsMap = new Map();
+    for (const r of pastRecords) {
+      const cleanMinutes = (r.appBreakdown || [])
+        .filter((a) => !isExcludedApp(a.packageName, a.appName))
+        .reduce((s, a) => s + (a.usageMinutes || 0), 0);
+      recordsMap.set(r.date, cleanMinutes > 0 ? cleanMinutes : (r.totalScreenTimeMinutes <= 1440 ? r.totalScreenTimeMinutes : 0));
+    }
+    // Set today's sanitized total
+    recordsMap.set(targetDate, totalMinutesToday);
+
+    // Calculate Monday-Sunday for current week
+    const nowTarget = new Date(`${targetDate}T12:00:00Z`);
+    const dayOfWeek = (nowTarget.getUTCDay() + 6) % 7; // 0 = Mon, 6 = Sun
+    const monday = new Date(nowTarget);
+    monday.setUTCDate(nowTarget.getUTCDate() - dayOfWeek);
+
+    const weeklyValues = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setUTCDate(monday.getUTCDate() + i);
+      const dateStr = d.toISOString().split('T')[0];
+      weeklyValues.push(recordsMap.get(dateStr) || 0);
+    }
+
+    // Calculate 4-week monthly breakdown (Week 1 to Week 4)
+    const monthlyValues = [0, 0, 0, 0];
+    for (let w = 0; w < 4; w++) {
+      let weekSum = 0;
+      for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+        const d = new Date(nowTarget);
+        const daysAgo = (3 - w) * 7 + dayOffset;
+        d.setUTCDate(nowTarget.getUTCDate() - daysAgo);
+        const dateStr = d.toISOString().split('T')[0];
+        weekSum += (recordsMap.get(dateStr) || 0);
+      }
+      monthlyValues[w] = weekSum;
+    }
+    if (monthlyValues[3] === 0 && totalMinutesWeekly > 0) {
+      monthlyValues[3] = totalMinutesWeekly;
+    }
 
     res.status(200).json({
       success: true,
@@ -203,6 +315,14 @@ exports.getAppUsage = async (req, res, next) => {
       totalMinutesToday,
       totalMinutesWeekly,
       totalMinutesMonthly,
+      weeklyBreakdown: {
+        labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        values: weeklyValues,
+      },
+      monthlyBreakdown: {
+        labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+        values: monthlyValues,
+      },
       count: sanitizedUsage.length,
       usage: sanitizedUsage,
       dailyRecord: dailyRecord || null,

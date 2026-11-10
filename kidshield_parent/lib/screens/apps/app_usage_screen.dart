@@ -7,6 +7,7 @@ import '../../constants/app_colors.dart';
 import '../../models/app_usage_model.dart';
 import '../../providers/child_provider.dart';
 import '../../providers/monitoring_provider.dart';
+import '../../services/monitoring_service.dart';
 import '../../widgets/usage_chart.dart';
 import '../../widgets/empty_state.dart';
 
@@ -214,7 +215,9 @@ class _AppUsageScreenState extends State<AppUsageScreen> with SingleTickerProvid
     String periodTitle = 'Total Screen Time Today';
     String limitText = 'Allowed Daily Limit: ${(selectedChild.dailyScreenTimeLimitMinutes / 60).toStringAsFixed(1)} hours';
 
-    List<AppUsageModel> appsList = List.from(monitoringProvider.appUsage);
+    List<AppUsageModel> appsList = monitoringProvider.appUsage
+        .where((a) => !MonitoringService.isExcludedApp(a.packageName, a.appName))
+        .toList();
 
     List<double> chartValues;
     List<String> chartLabels;
@@ -236,6 +239,7 @@ class _AppUsageScreenState extends State<AppUsageScreen> with SingleTickerProvid
       chartValues = monitoringProvider.todayHourlyMinutes;
       chartLimitMinutes = selectedChild.dailyScreenTimeLimitMinutes.toDouble();
       chartLimitLabel = 'Limit ${(chartLimitMinutes / 60).toStringAsFixed(1)}h';
+      appsList = appsList.where((a) => a.usageMinutesToday > 0).toList();
       appsList.sort((a, b) => b.usageMinutesToday.compareTo(a.usageMinutesToday));
     } else if (_selectedPeriod == 1) {
       // THIS WEEK
@@ -243,12 +247,13 @@ class _AppUsageScreenState extends State<AppUsageScreen> with SingleTickerProvid
       periodTitle = 'Total Screen Time This Week';
       limitText = 'Weekly Limit: ${((selectedChild.dailyScreenTimeLimitMinutes * 7) / 60).toStringAsFixed(1)} hours';
       chartTitle = 'Daily Screen Time Breakdown';
-      chartSubtitle = 'Daily comparison with configured parental limit';
-      chartBadge = '7 Days';
+      chartSubtitle = 'Daily real usage compared with parental daily limit';
+      chartBadge = 'Mon - Sun';
       chartLabels = const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       chartValues = monitoringProvider.weeklyScreenTimeMinutes;
       chartLimitMinutes = selectedChild.dailyScreenTimeLimitMinutes.toDouble();
-      chartLimitLabel = 'Limit ${(chartLimitMinutes / 60).toStringAsFixed(1)}h';
+      chartLimitLabel = 'Daily Limit ${(chartLimitMinutes / 60).toStringAsFixed(1)}h';
+      appsList = appsList.where((a) => a.usageMinutesWeekly > 0).toList();
       appsList.sort((a, b) => b.usageMinutesWeekly.compareTo(a.usageMinutesWeekly));
     } else {
       // THIS MONTH
@@ -262,6 +267,7 @@ class _AppUsageScreenState extends State<AppUsageScreen> with SingleTickerProvid
       chartValues = monitoringProvider.monthlyWeeksScreenTimeMinutes;
       chartLimitMinutes = (selectedChild.dailyScreenTimeLimitMinutes * 7).toDouble();
       chartLimitLabel = 'Weekly Limit ${(chartLimitMinutes / 60).toStringAsFixed(1)}h';
+      appsList = appsList.where((a) => a.usageMinutesMonthly > 0).toList();
       appsList.sort((a, b) => b.usageMinutesMonthly.compareTo(a.usageMinutesMonthly));
     }
 

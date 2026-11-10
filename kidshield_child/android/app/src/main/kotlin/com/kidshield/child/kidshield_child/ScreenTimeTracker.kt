@@ -37,7 +37,7 @@ object ScreenTimeTracker {
     // Default reporting timezone is Asia/Kolkata (Indian Standard Time)
     val REPORTING_TIMEZONE: TimeZone = TimeZone.getTimeZone("Asia/Kolkata")
 
-    // Irrelevant internal system components excluded from the user-facing app breakdown
+    // Irrelevant internal system components and launchers excluded from child leisure screen time
     private val EXCLUDED_SYSTEM_PACKAGES = hashSetOf(
         "android",
         "com.android.systemui",
@@ -48,8 +48,41 @@ object ScreenTimeTracker {
         "com.sec.android.inputmethod",
         "com.google.android.permissioncontroller",
         "com.android.permissioncontroller",
+        "com.sec.android.app.launcher", // Samsung One UI Home
+        "com.google.android.apps.nexuslauncher", // Pixel Launcher
+        "com.android.launcher",
+        "com.android.launcher3",
+        "com.mi.android.globallauncher",
+        "com.miui.home",
+        "com.oppo.launcher",
+        "com.coloros.launcher",
+        "com.vivo.launcher",
+        "com.bbk.launcher2",
+        "com.huawei.android.launcher",
+        "com.oneplus.launcher",
+        "com.teslacoilsw.launcher",
+        "com.kidshield.parent.kidshield_parent",
         "com.kidshield.child.kidshield_child" // KidShield Junior itself is excluded from leisure screen time
     )
+
+    fun isExcluded(pkg: String?, context: Context? = null): Boolean {
+        if (pkg.isNullOrEmpty()) return true
+        if (EXCLUDED_SYSTEM_PACKAGES.contains(pkg)) return true
+        val lower = pkg.lowercase(Locale.US)
+        if (lower.contains("launcher") || lower.contains("systemui") || lower.contains("honeyboard") || lower.contains("kidshield")) {
+            return true
+        }
+        if (context != null) {
+            try {
+                val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                val resolveInfo = context.packageManager.resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
+                if (resolveInfo?.activityInfo?.packageName == pkg) {
+                    return true
+                }
+            } catch (_: Exception) {}
+        }
+        return false
+    }
 
     fun hasUsageStatsPermission(context: Context): Boolean {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
@@ -148,6 +181,7 @@ object ScreenTimeTracker {
             while (events.hasNextEvent()) {
                 events.getNextEvent(event)
                 val pkg = event.packageName ?: continue
+                if (isExcluded(pkg, context)) continue
                 val time = event.timeStamp
 
                 when (event.eventType) {
@@ -166,9 +200,7 @@ object ScreenTimeTracker {
                         if (end > start) {
                             val duration = end - start
                             packageTodayTimeMap[pkg] = (packageTodayTimeMap[pkg] ?: 0L) + duration
-                            if (!EXCLUDED_SYSTEM_PACKAGES.contains(pkg)) {
-                                interactiveDeviceIntervals.add(UsageInterval(start, end))
-                            }
+                            interactiveDeviceIntervals.add(UsageInterval(start, end))
                         }
                     }
                 }
@@ -176,13 +208,12 @@ object ScreenTimeTracker {
 
             // Close any currently active foreground sessions at 'now'
             for ((pkg, openTime) in packageOpenTime) {
+                if (isExcluded(pkg, context)) continue
                 val start = Math.max(openTime, todayStart)
                 if (now > start) {
                     val duration = now - start
                     packageTodayTimeMap[pkg] = (packageTodayTimeMap[pkg] ?: 0L) + duration
-                    if (!EXCLUDED_SYSTEM_PACKAGES.contains(pkg)) {
-                        interactiveDeviceIntervals.add(UsageInterval(start, now))
-                    }
+                    interactiveDeviceIntervals.add(UsageInterval(start, now))
                 }
             }
         } catch (e: Exception) {
@@ -228,7 +259,7 @@ object ScreenTimeTracker {
             val elapsedMinutesSinceMidnight = ((now - todayStart) / 60000L).toInt()
             var sum = 0
             for ((pkg, ms) in packageTodayTimeMap) {
-                if (!EXCLUDED_SYSTEM_PACKAGES.contains(pkg)) {
+                if (!isExcluded(pkg, context)) {
                     sum += (ms / 60000L).toInt()
                 }
             }
@@ -251,8 +282,8 @@ object ScreenTimeTracker {
         var totalMinutesMonthly = 0
 
         for (pkg in allPackages) {
-            // Exclude internal system processes from the visible apps breakdown
-            if (EXCLUDED_SYSTEM_PACKAGES.contains(pkg)) continue
+            // Exclude internal system processes and launchers from the visible apps breakdown
+            if (isExcluded(pkg, context)) continue
 
             val tMs = packageTodayTimeMap[pkg] ?: 0L
             val wMs = weeklyMap[pkg] ?: 0L
