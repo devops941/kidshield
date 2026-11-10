@@ -237,8 +237,8 @@ class _AppUsageScreenState extends State<AppUsageScreen> with SingleTickerProvid
       chartBadge = 'Today';
       chartLabels = const ['6 AM', '9 AM', '12 PM', '3 PM', '6 PM', '9 PM'];
       chartValues = monitoringProvider.todayHourlyMinutes;
-      chartLimitMinutes = selectedChild.dailyScreenTimeLimitMinutes.toDouble();
-      chartLimitLabel = 'Limit ${(chartLimitMinutes / 60).toStringAsFixed(1)}h';
+      chartLimitMinutes = 0.0;
+      chartLimitLabel = '';
       appsList = appsList.where((a) => a.usageMinutesToday > 0).toList();
       appsList.sort((a, b) => b.usageMinutesToday.compareTo(a.usageMinutesToday));
     } else if (_selectedPeriod == 1) {

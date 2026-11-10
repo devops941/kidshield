@@ -246,19 +246,7 @@ exports.getAppUsage = async (req, res, next) => {
     // Filter out excluded launcher/system packages
     usage = usage.filter((item) => !isExcludedApp(item.packageName, item.appName));
 
-    // 2. Calculate real today total from active apps
-    let totalMinutesToday = usage.reduce((sum, item) => {
-      if (item.lastSyncDate === targetDate) {
-        return sum + (item.usageMinutesToday || 0);
-      }
-      return sum;
-    }, 0);
-
-    if (dailyRecord && dailyRecord.totalScreenTimeMinutes > 0) {
-      totalMinutesToday = Math.max(dailyRecord.totalScreenTimeMinutes, totalMinutesToday);
-    }
-
-    // 3. Sanitize individual apps: If an app has not been synced today, its usageMinutesToday is 0
+    // 2. Build sanitized usage list and merge with dailyRecord breakdown if available
     const sanitizedUsage = usage.map((item) => {
       const isCurrentDay = item.lastSyncDate === targetDate;
       const obj = item.toObject();
@@ -269,7 +257,6 @@ exports.getAppUsage = async (req, res, next) => {
       return obj;
     });
 
-    // Merge exact today usage from dailyRecord breakdown if available
     if (dailyRecord && Array.isArray(dailyRecord.appBreakdown)) {
       const breakdownMap = new Map();
       for (const a of dailyRecord.appBreakdown) {
@@ -287,8 +274,20 @@ exports.getAppUsage = async (req, res, next) => {
       }
     }
 
-    const totalMinutesWeekly = sanitizedUsage.reduce((sum, item) => sum + (item.usageMinutesWeekly || 0), 0);
-    const totalMinutesMonthly = sanitizedUsage.reduce((sum, item) => sum + (item.usageMinutesMonthly || 0), 0);
+    // 3. All periods (Today, Week, Month) follow THE SAME exact rule: Total = Sum of active apps!
+    let totalMinutesToday = sanitizedUsage.reduce((sum, item) => sum + (item.usageMinutesToday || 0), 0);
+    if (dailyRecord && dailyRecord.totalScreenTimeMinutes > totalMinutesToday) {
+      totalMinutesToday = dailyRecord.totalScreenTimeMinutes;
+    }
+
+    const totalMinutesWeekly = Math.max(
+      totalMinutesToday,
+      sanitizedUsage.reduce((sum, item) => sum + (item.usageMinutesWeekly || 0), 0)
+    );
+    const totalMinutesMonthly = Math.max(
+      totalMinutesWeekly,
+      sanitizedUsage.reduce((sum, item) => sum + (item.usageMinutesMonthly || 0), 0)
+    );
 
     // 4. Fetch real past 30 days DailyActivity records to build exact Monday-Sunday and 4-week breakdowns
     const pastRecords = await DailyActivity.find({ childId }).sort({ date: 1 });

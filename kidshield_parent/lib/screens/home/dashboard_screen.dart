@@ -1327,7 +1327,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     FittedBox(
                                       fit: BoxFit.scaleDown,
                                       child: Text(
-                                        '${app.usageMinutesToday} min',
+                                        app.usageMinutesToday > 0
+                                            ? '${app.usageMinutesToday} min'
+                                            : '${app.usageMinutesWeekly}m/wk',
                                         style: TextStyle(
                                           fontSize: 8.5.sp,
                                           fontWeight: FontWeight.w700,

@@ -28,13 +28,34 @@ class UsageChart extends StatelessWidget {
     final xLabels = labels ?? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final usageData = values ?? weeklyMinutes ?? List<double>.filled(xLabels.length, 0.0);
     final maxVal = usageData.fold<double>(0.0, (m, v) => v > m ? v : m);
-    final limit = customLimitMinutes ?? (dailyLimitMinutes > 0 ? dailyLimitMinutes.toDouble() : 180.0);
-    final highest = maxVal > limit ? maxVal : limit;
+    final limit = customLimitMinutes != null
+        ? customLimitMinutes!
+        : (dailyLimitMinutes > 0 ? dailyLimitMinutes.toDouble() : 180.0);
 
-    // Clean ceiling in whole hours
-    final totalHoursCeil = ((highest * 1.15) / 60).ceil().clamp(3, 200);
-    final effectiveMaxY = totalHoursCeil * 60.0;
-    final interval = (totalHoursCeil <= 5) ? 60.0 : ((totalHoursCeil / 4).ceil() * 60.0);
+    double effectiveMaxY;
+    double interval;
+    if (limit <= 0) {
+      // Dynamic scaling for hourly timeline (no artificial daily limit ceiling)
+      if (maxVal <= 10) {
+        effectiveMaxY = 15.0;
+        interval = 5.0;
+      } else if (maxVal <= 30) {
+        effectiveMaxY = 30.0;
+        interval = 10.0;
+      } else if (maxVal <= 60) {
+        effectiveMaxY = 60.0;
+        interval = 15.0;
+      } else {
+        final hoursCeil = ((maxVal * 1.2) / 60).ceil();
+        effectiveMaxY = hoursCeil * 60.0;
+        interval = 60.0;
+      }
+    } else {
+      final highest = maxVal > limit ? maxVal : limit;
+      final totalHoursCeil = ((highest * 1.15) / 60).ceil().clamp(2, 200);
+      effectiveMaxY = totalHoursCeil * 60.0;
+      interval = (totalHoursCeil <= 5) ? 60.0 : ((totalHoursCeil / 4).ceil() * 60.0);
+    }
 
     final displayLimitLabel = limitLabel ?? 'Limit ${(limit / 60).toStringAsFixed(1)}h';
     final rodWidth = xLabels.length <= 4 ? 22.w : (xLabels.length <= 6 ? 16.w : 14.w);
@@ -92,10 +113,19 @@ class UsageChart extends StatelessWidget {
             leftTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
-                interval: interval > 0 ? interval : 60,
+                interval: interval > 0 ? interval : 15,
                 reservedSize: 32,
                 getTitlesWidget: (value, meta) {
                   if (value < 0 || value > effectiveMaxY) return const SizedBox.shrink();
+                  if (effectiveMaxY <= 60) {
+                    return Text(
+                      '${value.toInt()}m',
+                      style: TextStyle(
+                        fontSize: 9.5.sp,
+                        color: isDark ? AppColors.textMutedDark : AppColors.textMutedLight,
+                      ),
+                    );
+                  }
                   final hours = (value / 60).round();
                   return Text(
                     '${hours}h',
@@ -120,25 +150,27 @@ class UsageChart extends StatelessWidget {
             ),
           ),
           extraLinesData: ExtraLinesData(
-            horizontalLines: [
-              HorizontalLine(
-                y: limit,
-                color: Colors.redAccent.withValues(alpha: 0.75),
-                strokeWidth: 1.5,
-                dashArray: [6, 4],
-                label: HorizontalLineLabel(
-                  show: true,
-                  alignment: Alignment.topRight,
-                  padding: EdgeInsets.only(right: 6.w, bottom: 2.h),
-                  style: TextStyle(
-                    fontSize: 9.sp,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.redAccent,
-                  ),
-                  labelResolver: (_) => displayLimitLabel,
-                ),
-              ),
-            ],
+            horizontalLines: limit > 0
+                ? [
+                    HorizontalLine(
+                      y: limit,
+                      color: Colors.redAccent.withValues(alpha: 0.75),
+                      strokeWidth: 1.5,
+                      dashArray: [6, 4],
+                      label: HorizontalLineLabel(
+                        show: true,
+                        alignment: Alignment.topRight,
+                        padding: EdgeInsets.only(right: 6.w, bottom: 2.h),
+                        style: TextStyle(
+                          fontSize: 9.sp,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.redAccent,
+                        ),
+                        labelResolver: (_) => displayLimitLabel,
+                      ),
+                    ),
+                  ]
+                : [],
           ),
           borderData: FlBorderData(show: false),
           barGroups: List.generate(xLabels.length, (index) {

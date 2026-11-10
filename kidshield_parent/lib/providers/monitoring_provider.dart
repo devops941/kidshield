@@ -56,30 +56,27 @@ class MonitoringProvider extends ChangeNotifier {
   List<double> _backendMonthlyBreakdown = [];
 
   int get totalScreenTimeMinutesToday {
-    if (_backendTotalMinutesToday != null) {
-      return _backendTotalMinutesToday!;
-    }
-    return _appUsage
+    final appsSum = _appUsage
         .where((a) => !MonitoringService.isExcludedApp(a.packageName, a.appName))
         .fold(0, (sum, item) => sum + item.usageMinutesToday);
+    if (appsSum > 0) return appsSum;
+    return _backendTotalMinutesToday ?? 0;
   }
 
   int get totalScreenTimeMinutesWeekly {
-    if (_backendTotalMinutesWeekly != null) {
-      return _backendTotalMinutesWeekly!;
-    }
-    return _appUsage
+    final appsSum = _appUsage
         .where((a) => !MonitoringService.isExcludedApp(a.packageName, a.appName))
         .fold(0, (sum, item) => sum + item.usageMinutesWeekly);
+    if (appsSum > 0) return appsSum;
+    return _backendTotalMinutesWeekly ?? 0;
   }
 
   int get totalScreenTimeMinutesMonthly {
-    if (_backendTotalMinutesMonthly != null) {
-      return _backendTotalMinutesMonthly!;
-    }
-    return _appUsage
+    final appsSum = _appUsage
         .where((a) => !MonitoringService.isExcludedApp(a.packageName, a.appName))
         .fold(0, (sum, item) => sum + item.usageMinutesMonthly);
+    if (appsSum > 0) return appsSum;
+    return _backendTotalMinutesMonthly ?? 0;
   }
 
   List<double> get todayHourlyMinutes {
