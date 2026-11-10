@@ -9,6 +9,7 @@ class AppColors {
   static const Color royalBlue = Color(0xFF2563EB);
   static const Color neonCyan = Color(0xFF00F0FF);
   static const Color electricCyan = Color(0xFF00E5FF);
+  static const Color accentCyan = Color(0xFF00E5FF);
   static const Color cyanAccent = Color(0xFF06B6D4);
   static const Color mintGreen = Color(0xFF00E676);
   static const Color softGreen = Color(0xFF10B981);

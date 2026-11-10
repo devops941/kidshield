@@ -31,7 +31,7 @@ class CompanionProvider extends ChangeNotifier {
 
   DateTime? _lastUsageRefresh;
 
-  Future<void> refreshAppUsage([String? childId, {bool force = false}]) async {
+  Future<void> refreshAppUsage([String? childId, bool force = false]) async {
     final now = DateTime.now();
     if (!force && _lastUsageRefresh != null && now.difference(_lastUsageRefresh!).inSeconds < 15) {
       return;

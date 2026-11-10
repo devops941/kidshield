@@ -60,11 +60,11 @@ class ChildDashboardScreen extends StatelessWidget {
         ),
         child: SafeArea(
           child: RefreshIndicator(
-            color: AppColors.accentCyan,
+            color: AppColors.electricCyan,
             backgroundColor: AppColors.surfaceDark,
             onRefresh: () async {
               if (child != null && child.id.isNotEmpty) {
-                await companion.refreshAppUsage(child.id, force: true);
+                await companion.refreshAppUsage(child.id, true);
                 await location.refreshLocation(child.id);
               }
             },

@@ -86,7 +86,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         ),
                         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
                         itemCount: _notices.length,
-                        separatorBuilder: (_, __) => SizedBox(height: 12.h),
+                        separatorBuilder: (_, _) => SizedBox(height: 12.h),
                         itemBuilder: (context, index) {
                           final item = _notices[index];
                           final type = item['type']?.toString() ?? 'general';
