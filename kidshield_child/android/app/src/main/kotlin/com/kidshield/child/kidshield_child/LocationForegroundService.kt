@@ -87,6 +87,9 @@ class LocationForegroundService : Service(), LocationListener {
             // Periodic restrictions sync from parent console every 30 seconds
             AppBlockManager.syncRestrictions(applicationContext, childId, baseUrl)
 
+            // Real-time schedule boundary check (Study Mode / Bedtime alerts)
+            AppBlockManager.checkScheduleAndNotify(applicationContext)
+
             // Periodic screen time background synchronization every 60 seconds (every 2 ticks)
             screenTimeTickCounter++
             if (screenTimeTickCounter >= 2) {

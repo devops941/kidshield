@@ -447,6 +447,127 @@ class ChildDashboardScreen extends StatelessWidget {
                 ),
                 SizedBox(height: 16.h),
 
+                // ================= LIVE ACTIVE SCHEDULE ALERT BANNER =================
+                Builder(builder: (context) {
+                  final isStudy = _isScheduleActive(child?.studyTimeStart, child?.studyTimeEnd);
+                  final isBedtime = _isScheduleActive(child?.bedtimeStart, child?.bedtimeEnd);
+
+                  if (isStudy) {
+                    return Container(
+                      margin: EdgeInsets.only(bottom: 14.h),
+                      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF072147), Color(0xFF0B3A7B)],
+                        ),
+                        borderRadius: BorderRadius.circular(16.r),
+                        border: Border.all(color: AppColors.electricCyan, width: 1.2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.electricCyan.withValues(alpha: 0.15),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(8.r),
+                            decoration: BoxDecoration(
+                              color: AppColors.electricCyan.withValues(alpha: 0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.menu_book_rounded, color: AppColors.electricCyan, size: 20.r),
+                          ),
+                          SizedBox(width: 12.w),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '📚 Study & Homework Mode is ACTIVE',
+                                  style: TextStyle(
+                                    fontSize: 12.5.sp,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                SizedBox(height: 2.h),
+                                Text(
+                                  'Entertainment apps are locked until ${_format24to12(child?.studyTimeEnd)}. Focus on your homework!',
+                                  style: TextStyle(
+                                    fontSize: 10.5.sp,
+                                    color: const Color(0xFFCFE2FF),
+                                    height: 1.25,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  } else if (isBedtime) {
+                    return Container(
+                      margin: EdgeInsets.only(bottom: 14.h),
+                      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF1E1742), Color(0xFF2E2368)],
+                        ),
+                        borderRadius: BorderRadius.circular(16.r),
+                        border: Border.all(color: const Color(0xFF818CF8), width: 1.2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF818CF8).withValues(alpha: 0.18),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(8.r),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF818CF8).withValues(alpha: 0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.bedtime_rounded, color: const Color(0xFF818CF8), size: 20.r),
+                          ),
+                          SizedBox(width: 12.w),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '🌙 Night Bedtime Mode is ACTIVE',
+                                  style: TextStyle(
+                                    fontSize: 12.5.sp,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                SizedBox(height: 2.h),
+                                Text(
+                                  'Time to rest and sleep! Device access is restricted until ${_format24to12(child?.bedtimeEnd)}. Goodnight!',
+                                  style: TextStyle(
+                                    fontSize: 10.5.sp,
+                                    color: const Color(0xFFE0E7FF),
+                                    height: 1.25,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                }),
+
                 // ================= FAMILY ROUTINE & SCHEDULES CARD =================
                 Container(
                   padding: EdgeInsets.all(16.r),
@@ -479,6 +600,7 @@ class ChildDashboardScreen extends StatelessWidget {
                             ? _formatScheduleRange(child.studyTimeStart, child.studyTimeEnd)
                             : 'Not Scheduled',
                         accentColor: AppColors.electricCyan,
+                        isActive: _isScheduleActive(child?.studyTimeStart, child?.studyTimeEnd),
                       ),
                       SizedBox(height: 8.h),
 
@@ -490,6 +612,7 @@ class ChildDashboardScreen extends StatelessWidget {
                             ? _formatScheduleRange(child.bedtimeStart, child.bedtimeEnd)
                             : 'Not Scheduled',
                         accentColor: const Color(0xFF818CF8),
+                        isActive: _isScheduleActive(child?.bedtimeStart, child?.bedtimeEnd),
                       ),
                     ],
                   ),
@@ -597,6 +720,28 @@ class ChildDashboardScreen extends StatelessWidget {
     return timeStr;
   }
 
+  bool _isScheduleActive(String? start, String? end) {
+    if (start == null || end == null || start.trim().isEmpty || end.trim().isEmpty) return false;
+    try {
+      final sParts = start.trim().split(':');
+      final eParts = end.trim().split(':');
+      final sMin = int.parse(sParts[0]) * 60 + int.parse(sParts[1]);
+      final eMin = int.parse(eParts[0]) * 60 + int.parse(eParts[1]);
+
+      final now = DateTime.now();
+      final curMin = now.hour * 60 + now.minute;
+
+      if (sMin <= eMin) {
+        return curMin >= sMin && curMin < eMin;
+      } else {
+        // Wraps over midnight (e.g. 21:30 - 06:30)
+        return curMin >= sMin || curMin < eMin;
+      }
+    } catch (_) {
+      return false;
+    }
+  }
+
   String _formatScheduleRange(String? start, String? end) {
     if (start == null || end == null || start.isEmpty || end.isEmpty) {
       return 'Not Scheduled';
@@ -611,12 +756,14 @@ class ChildDashboardScreen extends StatelessWidget {
     required String title,
     required String time,
     required Color accentColor,
+    bool isActive = false,
   }) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
       decoration: BoxDecoration(
         color: const Color(0xFF050D22),
         borderRadius: BorderRadius.circular(14.r),
+        border: isActive ? Border.all(color: accentColor.withValues(alpha: 0.6), width: 1.2) : null,
       ),
       child: Row(
         children: [
@@ -632,6 +779,38 @@ class ChildDashboardScreen extends StatelessWidget {
               ),
             ),
           ),
+          if (isActive) ...[
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(6.r),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 5.r,
+                    height: 5.r,
+                    decoration: BoxDecoration(
+                      color: accentColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  SizedBox(width: 4.w),
+                  Text(
+                    'ACTIVE',
+                    style: TextStyle(
+                      fontSize: 8.5.sp,
+                      fontWeight: FontWeight.w800,
+                      color: accentColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: 8.w),
+          ],
           Text(
             time,
             style: TextStyle(

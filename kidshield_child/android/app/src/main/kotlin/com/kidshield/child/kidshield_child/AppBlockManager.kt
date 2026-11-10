@@ -14,6 +14,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Calendar
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
@@ -23,6 +26,15 @@ object AppBlockManager {
     private const val PREF_BLOCKED_PACKAGES = "blocked_packages_json"
     private const val CHANNEL_BLOCK_ID = "kidshield_app_block_channel"
     private const val NOTIFICATION_BLOCK_ID = 2027
+
+    private const val PREF_BEDTIME_START = "bedtime_start"
+    private const val PREF_BEDTIME_END = "bedtime_end"
+    private const val PREF_BEDTIME_ENABLED = "bedtime_enabled"
+    private const val PREF_STUDY_START = "study_start"
+    private const val PREF_STUDY_END = "study_end"
+    private const val PREF_STUDY_ENABLED = "study_enabled"
+    private const val PREF_WAS_STUDY_ACTIVE = "was_study_active"
+    private const val PREF_WAS_BEDTIME_ACTIVE = "was_bedtime_active"
 
     private val blockedPackages = ConcurrentHashMap.newKeySet<String>()
     private val executor = Executors.newSingleThreadExecutor()
@@ -229,6 +241,16 @@ object AppBlockManager {
                             }
                         }
                         updateBlockedPackages(context, set)
+
+                        val bStart = restrictions.optString("bedtimeStart", "21:30")
+                        val bEnd = restrictions.optString("bedtimeEnd", "06:30")
+                        val bEnabled = restrictions.optBoolean("isBedtimeEnabled", true)
+
+                        val sStart = restrictions.optString("studyTimeStart", "16:00")
+                        val sEnd = restrictions.optString("studyTimeEnd", "18:00")
+                        val sEnabled = restrictions.optBoolean("isStudyTimeEnabled", true)
+
+                        updateSchedules(context, bStart, bEnd, bEnabled, sStart, sEnd, sEnabled)
                     }
 
                     // Check for unread parent notices (app approvals or rejections)
@@ -308,17 +330,126 @@ object AppBlockManager {
         }
     }
 
-    private fun markNoticeRead(baseUrl: String, noticeId: String) {
+    fun updateSchedules(
+        context: Context,
+        bedtimeStart: String,
+        bedtimeEnd: String,
+        isBedtimeEnabled: Boolean,
+        studyTimeStart: String,
+        studyTimeEnd: String,
+        isStudyTimeEnabled: Boolean
+    ) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString(PREF_BEDTIME_START, bedtimeStart)
+            .putString(PREF_BEDTIME_END, bedtimeEnd)
+            .putBoolean(PREF_BEDTIME_ENABLED, isBedtimeEnabled)
+            .putString(PREF_STUDY_START, studyTimeStart)
+            .putString(PREF_STUDY_END, studyTimeEnd)
+            .putBoolean(PREF_STUDY_ENABLED, isStudyTimeEnabled)
+            .apply()
+    }
+
+    /**
+     * Checks whether the current time matches Study Mode or Bedtime Mode boundaries.
+     * Fires friendly notification alerts on transitions without spamming.
+     */
+    fun checkScheduleAndNotify(context: Context) {
         try {
-            val endpoint = URL("${baseUrl.trimEnd('/')}/notifications/child/$noticeId/read")
-            val conn = (endpoint.openConnection() as HttpURLConnection).apply {
-                requestMethod = "PUT"
-                connectTimeout = 5000
-                readTimeout = 5000
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val bStart = prefs.getString(PREF_BEDTIME_START, "21:30") ?: "21:30"
+            val bEnd = prefs.getString(PREF_BEDTIME_END, "06:30") ?: "06:30"
+            val bEnabled = prefs.getBoolean(PREF_BEDTIME_ENABLED, true)
+
+            val sStart = prefs.getString(PREF_STUDY_START, "16:00") ?: "16:00"
+            val sEnd = prefs.getString(PREF_STUDY_END, "18:00") ?: "18:00"
+            val sEnabled = prefs.getBoolean(PREF_STUDY_ENABLED, true)
+
+            val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Kolkata"))
+            val currentMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+
+            val isStudyActive = sEnabled && isTimeInRange(currentMinutes, toMinutes(sStart), toMinutes(sEnd))
+            val isBedtimeActive = bEnabled && isTimeInRange(currentMinutes, toMinutes(bStart), toMinutes(bEnd))
+
+            val wasStudyActive = prefs.getBoolean(PREF_WAS_STUDY_ACTIVE, false)
+            val wasBedtimeActive = prefs.getBoolean(PREF_WAS_BEDTIME_ACTIVE, false)
+
+            // Study Mode Transition Alerts
+            if (!wasStudyActive && isStudyActive) {
+                showScheduleNotification(
+                    context,
+                    "study_mode_start_alert",
+                    "📚 Study & Homework Mode Started",
+                    "Time to focus on your studies! Games & entertainment apps are paused until ${format12(sEnd)}."
+                )
+            } else if (wasStudyActive && !isStudyActive) {
+                showScheduleNotification(
+                    context,
+                    "study_mode_end_alert",
+                    "🎉 Study Time Finished!",
+                    "Great job completing your study session! You can take a break now."
+                )
             }
-            conn.responseCode
-            conn.disconnect()
-        } catch (_: Exception) {}
+
+            // Bedtime Mode Transition Alerts
+            if (!wasBedtimeActive && isBedtimeActive) {
+                showScheduleNotification(
+                    context,
+                    "bedtime_mode_start_alert",
+                    "🌙 Bedtime Mode Started",
+                    "Time to sleep and rest well! Device access is restricted until ${format12(bEnd)}. Goodnight!"
+                )
+            } else if (wasBedtimeActive && !isBedtimeActive) {
+                showScheduleNotification(
+                    context,
+                    "bedtime_mode_end_alert",
+                    "☀️ Good Morning!",
+                    "Bedtime mode has ended. Have a wonderful and productive day ahead!"
+                )
+            }
+
+            prefs.edit()
+                .putBoolean(PREF_WAS_STUDY_ACTIVE, isStudyActive)
+                .putBoolean(PREF_WAS_BEDTIME_ACTIVE, isBedtimeActive)
+                .apply()
+        } catch (e: Exception) {
+            Log.e(TAG, "checkScheduleAndNotify error: ${e.message}")
+        }
+    }
+
+    private fun showScheduleNotification(context: Context, id: String, title: String, message: String) {
+        showChildSystemNotification(context, id, title, message, "schedule_alert")
+    }
+
+    private fun toMinutes(timeStr: String): Int {
+        return try {
+            val parts = timeStr.trim().split(":")
+            parts[0].toInt() * 60 + parts[1].toInt()
+        } catch (_: Exception) {
+            0
+        }
+    }
+
+    private fun isTimeInRange(currentMinutes: Int, startMinutes: Int, endMinutes: Int): Boolean {
+        return if (startMinutes <= endMinutes) {
+            currentMinutes in startMinutes until endMinutes
+        } else {
+            currentMinutes >= startMinutes || currentMinutes < endMinutes
+        }
+    }
+
+    private fun format12(timeStr: String): String {
+        return try {
+            val parts = timeStr.trim().split(":")
+            var h = parts[0].toInt()
+            val m = parts[1].toInt()
+            val amPm = if (h >= 12) "PM" else "AM"
+            h = h % 12
+            if (h == 0) h = 12
+            String.format(Locale.US, "%d:%02d %s", h, m, amPm)
+        } catch (_: Exception) {
+            timeStr
+        }
     }
 }
 
