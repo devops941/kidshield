@@ -87,9 +87,9 @@ class LocationForegroundService : Service(), LocationListener {
             // Periodic restrictions sync from parent console every 30 seconds
             AppBlockManager.syncRestrictions(applicationContext, childId, baseUrl)
 
-            // Periodic screen time background synchronization every 5 minutes (every 10 location ticks)
+            // Periodic screen time background synchronization every 60 seconds (every 2 ticks)
             screenTimeTickCounter++
-            if (screenTimeTickCounter >= 10) {
+            if (screenTimeTickCounter >= 2) {
                 screenTimeTickCounter = 0
                 executor.execute {
                     ScreenTimeTracker.syncUsageInBackground(applicationContext, childId, baseUrl)

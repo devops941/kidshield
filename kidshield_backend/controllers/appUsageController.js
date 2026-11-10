@@ -92,11 +92,10 @@ exports.syncAppUsage = async (req, res, next) => {
     const validUsageData = usageData.filter((item) => !isExcludedApp(item.packageName, item.appName));
 
     // Calculate accurate non-overlapping device screen time strictly from valid apps
-    let totalMinutesToday = validUsageData.reduce((sum, item) => sum + (item.usageMinutesToday || 0), 0);
-    if (typeof incomingTotalMinutes === 'number' && incomingTotalMinutes >= 0 && incomingTotalMinutes < 1440) {
-      if (incomingTotalMinutes <= totalMinutesToday) {
-        totalMinutesToday = incomingTotalMinutes;
-      }
+    const appSum = validUsageData.reduce((sum, item) => sum + (item.usageMinutesToday || 0), 0);
+    let totalMinutesToday = appSum;
+    if (typeof incomingTotalMinutes === 'number' && incomingTotalMinutes >= 0 && incomingTotalMinutes <= 1440) {
+      totalMinutesToday = Math.max(incomingTotalMinutes, appSum);
     }
 
     // Handle non-ObjectId or demo children
@@ -244,12 +243,7 @@ exports.getAppUsage = async (req, res, next) => {
     }, 0);
 
     if (dailyRecord && dailyRecord.totalScreenTimeMinutes > 0) {
-      const validInRecord = (dailyRecord.appBreakdown || [])
-        .filter((a) => !isExcludedApp(a.packageName, a.appName))
-        .reduce((sum, a) => sum + (a.usageMinutes || 0), 0);
-      if (validInRecord > 0) {
-        totalMinutesToday = validInRecord;
-      }
+      totalMinutesToday = Math.max(dailyRecord.totalScreenTimeMinutes, totalMinutesToday);
     }
 
     // 3. Sanitize individual apps: If an app has not been synced today, its usageMinutesToday is 0
@@ -262,6 +256,24 @@ exports.getAppUsage = async (req, res, next) => {
       }
       return obj;
     });
+
+    // Merge exact today usage from dailyRecord breakdown if available
+    if (dailyRecord && Array.isArray(dailyRecord.appBreakdown)) {
+      const breakdownMap = new Map();
+      for (const a of dailyRecord.appBreakdown) {
+        if (!isExcludedApp(a.packageName, a.appName)) {
+          breakdownMap.set(a.packageName, a);
+        }
+      }
+      for (const item of sanitizedUsage) {
+        if (breakdownMap.has(item.packageName)) {
+          const b = breakdownMap.get(item.packageName);
+          if (b.usageMinutes > (item.usageMinutesToday || 0)) {
+            item.usageMinutesToday = b.usageMinutes;
+          }
+        }
+      }
+    }
 
     const totalMinutesWeekly = sanitizedUsage.reduce((sum, item) => sum + (item.usageMinutesWeekly || 0), 0);
     const totalMinutesMonthly = sanitizedUsage.reduce((sum, item) => sum + (item.usageMinutesMonthly || 0), 0);

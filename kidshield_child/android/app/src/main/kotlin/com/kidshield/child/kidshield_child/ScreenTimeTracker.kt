@@ -228,43 +228,76 @@ object ScreenTimeTracker {
             totalInteractiveMillis += (interval.endTime - interval.startTime)
         }
 
-        var totalMinutesToday = (totalInteractiveMillis / 60000L).toInt()
+        // 5a. Query Android UsageStats Aggregate Collections (Daily, Weekly, Monthly)
+        val elapsedMsToday = Math.max(1000L, now - todayStart)
+        val elapsedMinutesSinceMidnight = Math.max(1, (elapsedMsToday / 60000L).toInt())
 
-        // Fallback: If UsageEvents was empty or disabled on ROM, query aggregate stats with strict midnight cap
+        // Always merge daily aggregate stats from Android OS so no app foreground usage is dropped
+        val todayList = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, todayStart, now)
+        if (todayList != null) {
+            for (u in todayList) {
+                val pkg = u.packageName ?: continue
+                if (isExcluded(pkg, context)) continue
+                if (u.lastTimeUsed >= todayStart) {
+                    val currentMs = packageTodayTimeMap[pkg] ?: 0L
+                    val statMs = Math.min(u.totalTimeInForeground, elapsedMsToday)
+                    if (statMs > currentMs) {
+                        packageTodayTimeMap[pkg] = statMs
+                    }
+                }
+            }
+        }
+
+        // Additional queryAndAggregateUsageStats pass for ROMs with granular aggregation
+        try {
+            val aggMap = usm.queryAndAggregateUsageStats(todayStart, now)
+            if (aggMap != null && aggMap.isNotEmpty()) {
+                for ((pkg, u) in aggMap) {
+                    if (isExcluded(pkg, context)) continue
+                    if (u.lastTimeUsed >= todayStart) {
+                        val currentMs = packageTodayTimeMap[pkg] ?: 0L
+                        val statMs = Math.min(u.totalTimeInForeground, elapsedMsToday)
+                        if (statMs > currentMs) {
+                            packageTodayTimeMap[pkg] = statMs
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 5b. Calculate device screen time & app sum
+        var sumActiveAppMins = 0
+        for ((pkg, ms) in packageTodayTimeMap) {
+            if (!isExcluded(pkg, context)) {
+                // If used >= 25 seconds, count as 1 minute; otherwise standard integer division
+                val mins = if (ms in 25000L..59999L) 1 else (ms / 60000L).toInt()
+                sumActiveAppMins += mins
+            }
+        }
+
+        val eventInteractiveMins = (totalInteractiveMillis / 60000L).toInt()
+        var totalMinutesToday = Math.max(eventInteractiveMins, sumActiveAppMins)
+        totalMinutesToday = Math.min(totalMinutesToday, elapsedMinutesSinceMidnight)
+
         val weeklyMap = HashMap<String, Long>()
         val monthlyMap = HashMap<String, Long>()
 
         val weeklyList = usm.queryUsageStats(UsageStatsManager.INTERVAL_WEEKLY, weekStart, now)
         if (weeklyList != null) {
             for (u in weeklyList) {
-                weeklyMap[u.packageName] = (weeklyMap[u.packageName] ?: 0L) + u.totalTimeInForeground
+                if (!isExcluded(u.packageName, context)) {
+                    weeklyMap[u.packageName] = (weeklyMap[u.packageName] ?: 0L) + u.totalTimeInForeground
+                }
             }
         }
 
         val monthlyList = usm.queryUsageStats(UsageStatsManager.INTERVAL_MONTHLY, monthStart, now)
         if (monthlyList != null) {
             for (u in monthlyList) {
-                monthlyMap[u.packageName] = (monthlyMap[u.packageName] ?: 0L) + u.totalTimeInForeground
-            }
-        }
-
-        // If today event tracking was empty, populate from daily aggregate
-        if (packageTodayTimeMap.isEmpty()) {
-            val todayList = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, todayStart, now)
-            if (todayList != null) {
-                for (u in todayList) {
-                    packageTodayTimeMap[u.packageName] = (packageTodayTimeMap[u.packageName] ?: 0L) + u.totalTimeInForeground
+                if (!isExcluded(u.packageName, context)) {
+                    monthlyMap[u.packageName] = (monthlyMap[u.packageName] ?: 0L) + u.totalTimeInForeground
                 }
             }
-            // Clamp total to elapsed minutes since midnight to avoid carrying over yesterday
-            val elapsedMinutesSinceMidnight = ((now - todayStart) / 60000L).toInt()
-            var sum = 0
-            for ((pkg, ms) in packageTodayTimeMap) {
-                if (!isExcluded(pkg, context)) {
-                    sum += (ms / 60000L).toInt()
-                }
-            }
-            totalMinutesToday = Math.min(sum, elapsedMinutesSinceMidnight)
         }
 
         // 6. Build App Usage Breakdowns
@@ -290,7 +323,7 @@ object ScreenTimeTracker {
             val wMs = weeklyMap[pkg] ?: 0L
             val mMs = monthlyMap[pkg] ?: 0L
 
-            val todayMins = (tMs / 60000L).toInt()
+            val todayMins = if (tMs in 25000L..59999L) 1 else (tMs / 60000L).toInt()
             val weekMins = Math.max(todayMins, (wMs / 60000L).toInt())
             val monthMins = Math.max(weekMins, (mMs / 60000L).toInt())
 
@@ -322,7 +355,7 @@ object ScreenTimeTracker {
                 put("launchCountToday", launchCount)
             }
 
-            if (todayMins > 0) todayApps.add(item)
+            if (todayMins > 0 || launchCount > 0) todayApps.add(item)
             if (weekMins > 0) weeklyApps.add(item)
             if (monthMins > 0) monthlyApps.add(item)
         }

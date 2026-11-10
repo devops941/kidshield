@@ -30,13 +30,11 @@ class ChildDashboardScreen extends StatelessWidget {
     final companion = Provider.of<CompanionProvider>(context);
 
     final child = auth.currentProfile;
-    if (child != null && child.id.isNotEmpty && location.activeChildId != child.id) {
+    if (child != null && child.id.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        location.setActiveChildId(child.id);
-        companion.refreshAppUsage(child.id);
-      });
-    } else if (companion.screenTimeMinutesToday == 0 && child != null && child.id.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (location.activeChildId != child.id) {
+          location.setActiveChildId(child.id);
+        }
         companion.refreshAppUsage(child.id);
       });
     }
@@ -61,12 +59,21 @@ class ChildDashboardScreen extends StatelessWidget {
           gradient: AppColors.navyBackgroundGradient,
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: EdgeInsets.symmetric(horizontal: 18.w, vertical: 12.h),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          child: RefreshIndicator(
+            color: AppColors.accentCyan,
+            backgroundColor: AppColors.surfaceDark,
+            onRefresh: () async {
+              if (child != null && child.id.isNotEmpty) {
+                await companion.refreshAppUsage(child.id, force: true);
+                await location.refreshLocation(child.id);
+              }
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+              padding: EdgeInsets.symmetric(horizontal: 18.w, vertical: 12.h),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 // ================= TOP HEADER PROFILE BAR =================
                 Container(
                   padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
@@ -522,8 +529,9 @@ class ChildDashboardScreen extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildQuickActionCard({
     required BuildContext context,

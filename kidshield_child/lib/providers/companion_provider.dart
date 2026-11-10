@@ -29,7 +29,14 @@ class CompanionProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get weeklyApps => _usageService.weeklyApps;
   List<Map<String, dynamic>> get monthlyApps => _usageService.monthlyApps;
 
-  Future<void> refreshAppUsage([String? childId]) async {
+  DateTime? _lastUsageRefresh;
+
+  Future<void> refreshAppUsage([String? childId, {bool force = false}]) async {
+    final now = DateTime.now();
+    if (!force && _lastUsageRefresh != null && now.difference(_lastUsageRefresh!).inSeconds < 15) {
+      return;
+    }
+    _lastUsageRefresh = now;
     await _usageService.fetchRealAppUsageReport();
     notifyListeners();
     if (childId != null && childId.isNotEmpty) {
