@@ -79,11 +79,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Container(
-                        width: 44.w,
-                        height: 44.h,
+                        width: 46.w,
+                        height: 46.h,
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          shape: BoxShape.circle,
+                          borderRadius: BorderRadius.circular(12.r),
                           boxShadow: [
                             BoxShadow(
                               color: const Color(0xFF1E64D8).withValues(alpha: 0.16),
@@ -92,19 +92,17 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ],
                         ),
-                        padding: EdgeInsets.all(4.r),
-                        child: ClipOval(
-                          child: Image.asset(
-                            'assets/images/animated_logo.gif',
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Image.asset(
-                              'assets/images/Animated Safe Zone Protection Storyboard.gif',
-                              fit: BoxFit.cover,
-                              errorBuilder: (c, e, s) => Icon(
-                                Icons.shield_rounded,
-                                color: const Color(0xFF1E64D8),
-                                size: 24.r,
-                              ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Image.asset(
+                          'assets/images/parent_app_logo.png',
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) => Image.asset(
+                            'assets/images/kidshield_logo.png',
+                            fit: BoxFit.contain,
+                            errorBuilder: (c, e, s) => Icon(
+                              Icons.shield_rounded,
+                              color: const Color(0xFF1E64D8),
+                              size: 26.r,
                             ),
                           ),
                         ),
