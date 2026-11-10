@@ -40,18 +40,18 @@ class AppUsageModel {
 
   factory AppUsageModel.fromMap(Map<String, dynamic> map) {
     return AppUsageModel(
-      packageName: map['packageName'] ?? '',
-      appName: map['appName'] ?? '',
-      category: map['category'] ?? 'General',
-      usageMinutesToday: map['usageMinutesToday'] ?? 0,
-      usageMinutesWeekly: map['usageMinutesWeekly'] ?? 0,
-      usageMinutesMonthly: map['usageMinutesMonthly'] ?? 0,
-      launchCountToday: map['launchCountToday'] ?? 0,
+      packageName: map['packageName']?.toString() ?? '',
+      appName: map['appName']?.toString() ?? '',
+      category: map['category']?.toString() ?? 'General',
+      usageMinutesToday: (map['usageMinutesToday'] as num?)?.toInt() ?? 0,
+      usageMinutesWeekly: (map['usageMinutesWeekly'] as num?)?.toInt() ?? 0,
+      usageMinutesMonthly: (map['usageMinutesMonthly'] as num?)?.toInt() ?? 0,
+      launchCountToday: (map['launchCountToday'] as num?)?.toInt() ?? 0,
       lastUsed: map['lastUsed'] != null
           ? (DateTime.tryParse(map['lastUsed'].toString())?.toLocal() ?? DateTime.now())
           : DateTime.now(),
-      isRestricted: map['isRestricted'] ?? false,
-      icon: map['icon'] ?? '',
+      isRestricted: map['isRestricted'] == true,
+      icon: map['icon']?.toString() ?? '',
     );
   }
 }

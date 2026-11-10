@@ -157,7 +157,6 @@ class MonitoringProvider extends ChangeNotifier {
     try {
       final results = await Future.wait([
         _monitoringService.getLatestLocation(childId),
-        _monitoringService.getAppUsage(childId),
         _monitoringService.getInstalledApps(childId),
         _monitoringService.getRestrictions(childId),
         _monitoringService.getNotifications(childId),
@@ -166,13 +165,12 @@ class MonitoringProvider extends ChangeNotifier {
       ]);
 
       _currentLocation = results[0] as LocationModel?;
-      _appUsage = results[1] as List<AppUsageModel>;
-      _installedApps = results[2] as List<AppInfoModel>;
-      _restrictions = results[3] as RestrictionModel?;
-      _notifications = results[4] as List<NotificationModel>;
-      _locationHistory = results[5] as List<LocationModel>;
+      _installedApps = results[1] as List<AppInfoModel>;
+      _restrictions = results[2] as RestrictionModel?;
+      _notifications = results[3] as List<NotificationModel>;
+      _locationHistory = results[4] as List<LocationModel>;
 
-      final payload = results[6] as Map<String, dynamic>;
+      final payload = results[5] as Map<String, dynamic>;
       if (payload.isNotEmpty) {
         if (payload['totalMinutesToday'] != null) {
           _backendTotalMinutesToday = (payload['totalMinutesToday'] as num).toInt();
@@ -191,6 +189,12 @@ class MonitoringProvider extends ChangeNotifier {
         if (payload['monthlyBreakdown'] != null && payload['monthlyBreakdown']['values'] is List) {
           _backendMonthlyBreakdown = (payload['monthlyBreakdown']['values'] as List)
               .map((v) => (v as num).toDouble())
+              .toList();
+        }
+        if (payload['usage'] != null && payload['usage'] is List) {
+          _appUsage = (payload['usage'] as List)
+              .map((item) => AppUsageModel.fromMap(item as Map<String, dynamic>))
+              .where((item) => !MonitoringService.isExcludedApp(item.packageName, item.appName))
               .toList();
         }
       }

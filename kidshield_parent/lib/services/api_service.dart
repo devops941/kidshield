@@ -340,7 +340,7 @@ class ApiService {
       final response = await http.get(
         Uri.parse('$baseUrl/app-usage/$childId'),
         headers: _headers,
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 15));
       return jsonDecode(response.body);
     } catch (_) {
       return {};
@@ -352,7 +352,7 @@ class ApiService {
       final response = await http.get(
         Uri.parse('$baseUrl/app-usage/$childId/daily-history?limit=$limit'),
         headers: _headers,
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 15));
       final data = jsonDecode(response.body);
       return data['records'] ?? [];
     } catch (_) {
@@ -365,7 +365,7 @@ class ApiService {
       final response = await http.get(
         Uri.parse('$baseUrl/app-usage/installed/$childId'),
         headers: _headers,
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 15));
       final data = jsonDecode(response.body);
       return data['apps'] ?? [];
     } catch (_) {
@@ -453,7 +453,7 @@ class ApiService {
       final response = await http.get(
         Uri.parse('$baseUrl/restrictions/$childId'),
         headers: _headers,
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['restrictions'];
@@ -470,7 +470,7 @@ class ApiService {
         Uri.parse('$baseUrl/restrictions/$childId'),
         headers: _headers,
         body: jsonEncode(restrictions),
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 15));
     } catch (_) {}
   }
 
@@ -480,7 +480,7 @@ class ApiService {
       final response = await http.get(
         Uri.parse('$baseUrl/notifications'),
         headers: _headers,
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 15));
       final data = jsonDecode(response.body);
       return data['notifications'] ?? [];
     } catch (_) {
@@ -493,7 +493,7 @@ class ApiService {
       await http.put(
         Uri.parse('$baseUrl/notifications/$id/read'),
         headers: _headers,
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 15));
     } catch (_) {}
   }
 
@@ -502,7 +502,7 @@ class ApiService {
       await http.put(
         Uri.parse('$baseUrl/notifications/read-all'),
         headers: _headers,
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 15));
     } catch (_) {}
   }
 }
