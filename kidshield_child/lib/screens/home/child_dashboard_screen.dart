@@ -469,7 +469,7 @@ class ChildDashboardScreen extends StatelessWidget {
                         icon: Icons.menu_book_rounded,
                         title: 'Study & Homework Mode',
                         time: child != null && child.studyTimeStart.isNotEmpty && child.studyTimeEnd.isNotEmpty
-                            ? '${child.studyTimeStart} - ${child.studyTimeEnd}'
+                            ? _formatScheduleRange(child.studyTimeStart, child.studyTimeEnd)
                             : 'Not Scheduled',
                         accentColor: AppColors.electricCyan,
                       ),
@@ -480,7 +480,7 @@ class ChildDashboardScreen extends StatelessWidget {
                         icon: Icons.bedtime_rounded,
                         title: 'Night Bedtime Mode',
                         time: child != null && child.bedtimeStart.isNotEmpty && child.bedtimeEnd.isNotEmpty
-                            ? '${child.bedtimeStart} - ${child.bedtimeEnd}'
+                            ? _formatScheduleRange(child.bedtimeStart, child.bedtimeEnd)
                             : 'Not Scheduled',
                         accentColor: const Color(0xFF818CF8),
                       ),
@@ -570,6 +570,32 @@ class ChildDashboardScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _format24to12(String? timeStr) {
+    if (timeStr == null || timeStr.trim().isEmpty) return '';
+    try {
+      final parts = timeStr.trim().split(':');
+      if (parts.length >= 2) {
+        int hour = int.parse(parts[0]);
+        final int minute = int.parse(parts[1]);
+        final String period = hour >= 12 ? 'PM' : 'AM';
+        hour = hour % 12;
+        if (hour == 0) hour = 12;
+        final minStr = minute.toString().padLeft(2, '0');
+        return '$hour:$minStr $period';
+      }
+    } catch (_) {}
+    return timeStr;
+  }
+
+  String _formatScheduleRange(String? start, String? end) {
+    if (start == null || end == null || start.isEmpty || end.isEmpty) {
+      return 'Not Scheduled';
+    }
+    final formattedStart = _format24to12(start);
+    final formattedEnd = _format24to12(end);
+    return '$formattedStart - $formattedEnd';
   }
 
   Widget _buildScheduleRow({
