@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../constants/app_colors.dart';
 import '../../models/child_model.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../widgets/custom_button.dart';
 
@@ -252,8 +253,14 @@ class _PairDeviceScreenState extends State<PairDeviceScreen> {
               CustomButton(
                 text: 'Done & Return to Console',
                 icon: Icons.check_circle_outline_rounded,
-                onPressed: () {
-                  Navigator.of(context).pop();
+                onPressed: () async {
+                  final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                  if (authProvider.currentParent != null) {
+                    await context.read<ChildProvider>().loadChildren(authProvider.currentParent!.uid, silent: true);
+                  }
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
                 },
               ),
               SizedBox(height: 16.h),

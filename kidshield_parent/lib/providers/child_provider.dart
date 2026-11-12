@@ -35,8 +35,8 @@ class ChildProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> loadChildren(String parentId) async {
-    _setLoading(true);
+  Future<void> loadChildren(String parentId, {bool silent = false}) async {
+    if (!silent) _setLoading(true);
     _errorMessage = null;
     try {
       final fetched = await _childService.getChildren(parentId);
@@ -57,10 +57,13 @@ class ChildProvider extends ChangeNotifier {
       } else {
         _selectedChild = null;
       }
+      if (silent) {
+        notifyListeners();
+      }
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
-      _setLoading(false);
+      if (!silent) _setLoading(false);
     }
   }
 

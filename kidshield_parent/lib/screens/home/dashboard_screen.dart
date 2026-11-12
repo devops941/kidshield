@@ -56,8 +56,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final childProvider = Provider.of<ChildProvider>(context, listen: false);
     final monitoringProvider = Provider.of<MonitoringProvider>(context, listen: false);
 
-    if (childProvider.children.isEmpty && authProvider.currentParent != null) {
-      await childProvider.loadChildren(authProvider.currentParent!.uid);
+    if (authProvider.currentParent != null) {
+      await childProvider.loadChildren(authProvider.currentParent!.uid, silent: silent);
     }
 
     final child = childProvider.selectedChild;
@@ -594,20 +594,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Container(
                         padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 1.5.h),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFDCFCE7),
+                          color: selectedChild.isPaired ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
                           borderRadius: BorderRadius.circular(10.r),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.check_circle_rounded, size: 8.5.r, color: const Color(0xFF16A34A)),
+                            Icon(
+                              selectedChild.isPaired ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
+                              size: 8.5.r,
+                              color: selectedChild.isPaired ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                            ),
                             SizedBox(width: 3.w),
                             Text(
                               selectedChild.isPaired ? 'Connected' : 'Pending',
                               style: TextStyle(
                                 fontSize: 8.5.sp,
                                 fontWeight: FontWeight.w700,
-                                color: const Color(0xFF16A34A),
+                                color: selectedChild.isPaired ? const Color(0xFF16A34A) : const Color(0xFFD97706),
                               ),
                             ),
                           ],
