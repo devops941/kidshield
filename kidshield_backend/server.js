@@ -36,13 +36,13 @@ app.use(async (req, res, next) => {
   }
 });
 
-// Health Check Endpoint
-app.get('/', (req, res) => {
+// Health Check Endpoint (Accessible via root / and /api)
+app.get(['/', '/api'], (req, res) => {
   res.json({
     status: 'online',
     system: 'KidShield Smart Child Safety & Parental Monitoring Backend API',
     version: '1.0.0',
-    deployment: process.env.VERCEL ? 'Vercel Serverless' : 'Local Node.js Server',
+    deployment: 'Render Cloud PaaS',
     timestamp: new Date().toISOString(),
     endpoints: {
       auth: '/api/auth',
