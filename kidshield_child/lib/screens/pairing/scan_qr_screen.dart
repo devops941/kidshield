@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -27,6 +28,7 @@ class _ScanQrScreenState extends State<ScanQrScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _cameraController = MobileScannerController(
+      formats: const [BarcodeFormat.qrCode],
       detectionSpeed: DetectionSpeed.noDuplicates,
       facing: CameraFacing.back,
       torchEnabled: false,
@@ -52,13 +54,20 @@ class _ScanQrScreenState extends State<ScanQrScreen> with SingleTickerProviderSt
     // Haptic feedback just like standard QR scanners (GPay/PhonePe)
     HapticFeedback.mediumImpact();
 
-    // Clean up code: Parent QR might send "KS-3683" or "{\"code\":\"KS-3683\"}" or URL
+    // Clean up code: Parent QR might send "KS-3683" or "{\"pairingCode\":\"KS-3683\"}" or plain JSON
     String cleanCode = rawCode.trim();
-    if (cleanCode.contains('KS-')) {
-      final match = RegExp(r'KS-\d{4}').firstMatch(cleanCode);
-      if (match != null) {
-        cleanCode = match.group(0)!;
+    try {
+      if (cleanCode.startsWith('{') && cleanCode.endsWith('}')) {
+        final dynamic decoded = jsonDecode(cleanCode);
+        if (decoded is Map) {
+          cleanCode = (decoded['pairingCode'] ?? decoded['code'] ?? cleanCode).toString().trim();
+        }
       }
+    } catch (_) {}
+
+    final match = RegExp(r'KS-[\dA-Za-z]+', caseSensitive: false).firstMatch(cleanCode);
+    if (match != null) {
+      cleanCode = match.group(0)!.toUpperCase();
     }
 
     final auth = Provider.of<ChildAuthProvider>(context, listen: false);
@@ -74,10 +83,10 @@ class _ScanQrScreenState extends State<ScanQrScreen> with SingleTickerProviderSt
       _isProcessing = false;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(auth.errorMessage ?? 'Pairing failed. Please re-scan parent QR.'),
+          content: Text(auth.errorMessage ?? 'Pairing failed. Please re-scan parent QR or enter code manually.'),
           backgroundColor: AppColors.sosRed,
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 3),
+          duration: const Duration(seconds: 4),
         ),
       );
     }
@@ -153,20 +162,28 @@ class _ScanQrScreenState extends State<ScanQrScreen> with SingleTickerProviderSt
                               }
                             },
                             errorBuilder: (context, error) {
+                              final errText = error.toString().toLowerCase();
+                              final isPermissionError = errText.contains('permission');
                               return Container(
                                 color: const Color(0xFF07122C),
                                 padding: EdgeInsets.all(20.r),
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.camera_alt_outlined, size: 40.r, color: AppColors.electricCyan),
+                                    Icon(
+                                      isPermissionError ? Icons.no_photography_rounded : Icons.camera_alt_outlined,
+                                      size: 40.r,
+                                      color: isPermissionError ? AppColors.sosRed : AppColors.electricCyan,
+                                    ),
                                     SizedBox(height: 10.h),
                                     Text(
-                                      'Camera initializing...\nPoint at Parent QR',
+                                      isPermissionError
+                                          ? 'Camera permission denied.\nPlease enable Camera in Settings.'
+                                          : 'Camera initializing...\nPoint at Parent QR',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
                                         fontSize: 12.sp,
-                                        color: AppColors.textSecondary,
+                                        color: isPermissionError ? Colors.white : AppColors.textSecondary,
                                       ),
                                     ),
                                   ],

@@ -5,6 +5,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -209,7 +211,7 @@ object AppBlockManager {
         } else if (!savedBaseUrl.isNullOrEmpty()) {
             savedBaseUrl
         } else {
-            "http://192.168.1.9:5000/api"
+            "http://192.168.1.18:5000/api"
         }
 
         if (childId.isEmpty()) {
@@ -417,8 +419,66 @@ object AppBlockManager {
         }
     }
 
+    private const val CHANNEL_SCHEDULE_ID = "kidshield_schedule_alerts_channel"
+
     private fun showScheduleNotification(context: Context, id: String, title: String, message: String) {
-        showChildSystemNotification(context, id, title, message, "schedule_alert")
+        try {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+            val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val vibrationPattern = longArrayOf(0, 400, 200, 400)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val audioAttributes = AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                    .build()
+
+                val channel = NotificationChannel(
+                    CHANNEL_SCHEDULE_ID,
+                    "KidShield Routine & Schedule Alerts",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Audible alarm & sound notifications when study mode or bedtime begins/ends"
+                    enableLights(true)
+                    enableVibration(true)
+                    this.vibrationPattern = vibrationPattern
+                    setSound(soundUri, audioAttributes)
+                    lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+                }
+                nm.createNotificationChannel(channel)
+            }
+
+            val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            val pendingIntent = if (launchIntent != null) {
+                PendingIntent.getActivity(
+                    context,
+                    id.hashCode(),
+                    launchIntent,
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT else PendingIntent.FLAG_UPDATE_CURRENT
+                )
+            } else null
+
+            val notif = NotificationCompat.Builder(context, CHANNEL_SCHEDULE_ID)
+                .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                .setContentTitle(title)
+                .setContentText(message)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setSound(soundUri)
+                .setVibrate(vibrationPattern)
+                .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE or NotificationCompat.DEFAULT_LIGHTS)
+                .setAutoCancel(true)
+                .apply {
+                    if (pendingIntent != null) setContentIntent(pendingIntent)
+                }
+                .build()
+
+            nm.notify(id.hashCode(), notif)
+            Log.i(TAG, "🔔 Played Audible Schedule Alert to child: $title - $message")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to show audible schedule notification: ${e.message}")
+        }
     }
 
     private fun toMinutes(timeStr: String): Int {
@@ -450,6 +510,19 @@ object AppBlockManager {
         } catch (_: Exception) {
             timeStr
         }
+    }
+
+    private fun markNoticeRead(baseUrl: String, noticeId: String) {
+        try {
+            val endpoint = URL("${baseUrl.trimEnd('/')}/notifications/child/$noticeId/read")
+            val conn = (endpoint.openConnection() as HttpURLConnection).apply {
+                requestMethod = "PUT"
+                connectTimeout = 5000
+                readTimeout = 5000
+            }
+            conn.responseCode
+            conn.disconnect()
+        } catch (_: Exception) {}
     }
 }
 

@@ -86,6 +86,8 @@ exports.syncAppUsage = async (req, res, next) => {
       timezone,
       totalMinutesToday: incomingTotalMinutes,
       hourlyBreakdown: incomingHourlyBreakdown,
+      weeklyBreakdown: incomingWeeklyBreakdown,
+      monthlyBreakdown: incomingMonthlyBreakdown,
     } = req.body;
 
     if (!childId || !Array.isArray(usageData)) {
@@ -139,6 +141,12 @@ exports.syncAppUsage = async (req, res, next) => {
     };
     if (Array.isArray(incomingHourlyBreakdown) && incomingHourlyBreakdown.length === 6) {
       dailyUpdate.hourlyBreakdown = incomingHourlyBreakdown;
+    }
+    if (Array.isArray(incomingWeeklyBreakdown) && incomingWeeklyBreakdown.length === 7) {
+      dailyUpdate.weeklyBreakdown = incomingWeeklyBreakdown;
+    }
+    if (Array.isArray(incomingMonthlyBreakdown) && incomingMonthlyBreakdown.length === 4) {
+      dailyUpdate.monthlyBreakdown = incomingMonthlyBreakdown;
     }
 
     await DailyActivity.findOneAndUpdate(
@@ -307,29 +315,66 @@ exports.getAppUsage = async (req, res, next) => {
     const monday = new Date(nowTarget);
     monday.setUTCDate(nowTarget.getUTCDate() - dayOfWeek);
 
-    const weeklyValues = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday);
-      d.setUTCDate(monday.getUTCDate() + i);
-      const dateStr = d.toISOString().split('T')[0];
-      weeklyValues.push(recordsMap.get(dateStr) || 0);
+    let weeklyValues = [];
+    if (dailyRecord && Array.isArray(dailyRecord.weeklyBreakdown) && dailyRecord.weeklyBreakdown.length === 7) {
+      weeklyValues = dailyRecord.weeklyBreakdown.map((v) => Number(v) || 0);
+    } else {
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setUTCDate(monday.getUTCDate() + i);
+        const dateStr = d.toISOString().split('T')[0];
+        weeklyValues.push(recordsMap.get(dateStr) || 0);
+      }
+    }
+    // Ensure today's entry matches totalMinutesToday
+    if (dayOfWeek >= 0 && dayOfWeek < 7) {
+      weeklyValues[dayOfWeek] = Math.max(weeklyValues[dayOfWeek] || 0, totalMinutesToday);
+    }
+    // If weeklyValues sum is less than totalMinutesWeekly, distribute remaining minutes across past elapsed days of this week
+    const currentWeekSum = weeklyValues.reduce((s, v) => s + v, 0);
+    if (currentWeekSum < totalMinutesWeekly && dayOfWeek > 0) {
+      const diff = totalMinutesWeekly - currentWeekSum;
+      const pastDaysCount = dayOfWeek;
+      const perDay = Math.floor(diff / pastDaysCount);
+      let remainder = diff % pastDaysCount;
+      for (let i = 0; i < pastDaysCount; i++) {
+        const add = perDay + (remainder > 0 ? 1 : 0);
+        weeklyValues[i] = (weeklyValues[i] || 0) + add;
+        if (remainder > 0) remainder--;
+      }
     }
 
     // Calculate 4-week monthly breakdown (Week 1 to Week 4)
-    const monthlyValues = [0, 0, 0, 0];
-    for (let w = 0; w < 4; w++) {
-      let weekSum = 0;
-      for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-        const d = new Date(nowTarget);
-        const daysAgo = (3 - w) * 7 + dayOffset;
-        d.setUTCDate(nowTarget.getUTCDate() - daysAgo);
-        const dateStr = d.toISOString().split('T')[0];
-        weekSum += (recordsMap.get(dateStr) || 0);
+    let monthlyValues = [0, 0, 0, 0];
+    if (dailyRecord && Array.isArray(dailyRecord.monthlyBreakdown) && dailyRecord.monthlyBreakdown.length === 4) {
+      monthlyValues = dailyRecord.monthlyBreakdown.map((v) => Number(v) || 0);
+    } else {
+      for (let w = 0; w < 4; w++) {
+        let weekSum = 0;
+        for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+          const d = new Date(nowTarget);
+          const daysAgo = (3 - w) * 7 + dayOffset;
+          d.setUTCDate(nowTarget.getUTCDate() - daysAgo);
+          const dateStr = d.toISOString().split('T')[0];
+          weekSum += (recordsMap.get(dateStr) || 0);
+        }
+        monthlyValues[w] = weekSum;
       }
-      monthlyValues[w] = weekSum;
     }
-    if (monthlyValues[3] === 0 && totalMinutesWeekly > 0) {
-      monthlyValues[3] = totalMinutesWeekly;
+    // Ensure current week matches totalMinutesWeekly
+    monthlyValues[3] = Math.max(monthlyValues[3] || 0, totalMinutesWeekly);
+
+    // If monthlyValues sum is less than totalMinutesMonthly, distribute remaining minutes across past weeks 1, 2, 3
+    const currentMonthSum = monthlyValues.reduce((s, v) => s + v, 0);
+    if (currentMonthSum < totalMinutesMonthly) {
+      const diff = totalMinutesMonthly - currentMonthSum;
+      const perWeek = Math.floor(diff / 3);
+      let remainder = diff % 3;
+      for (let w = 0; w < 3; w++) {
+        const add = perWeek + (remainder > 0 ? 1 : 0);
+        monthlyValues[w] = (monthlyValues[w] || 0) + add;
+        if (remainder > 0) remainder--;
+      }
     }
 
     // Calculate real 6-block hourly breakdown for today (6 AM, 9 AM, 12 PM, 3 PM, 6 PM, 9 PM)

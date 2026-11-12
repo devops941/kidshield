@@ -22,6 +22,8 @@ const dailyActivitySchema = new mongoose.Schema(
       default: 0,
     },
     hourlyBreakdown: [{ type: Number }],
+    weeklyBreakdown: [{ type: Number }],
+    monthlyBreakdown: [{ type: Number }],
     appBreakdown: [
       {
         packageName: { type: String, required: true },

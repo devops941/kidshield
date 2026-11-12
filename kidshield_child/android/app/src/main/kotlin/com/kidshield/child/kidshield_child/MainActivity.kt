@@ -66,7 +66,7 @@ class MainActivity : FlutterActivity() {
                 }
                 "startBackgroundLocationService" -> {
                     val childId = call.argument<String>("childId") ?: ""
-                    val baseUrl = call.argument<String>("baseUrl") ?: "http://192.168.1.9:5000/api"
+                    val baseUrl = call.argument<String>("baseUrl") ?: "http://192.168.1.18:5000/api"
                     try {
                         val intent = Intent(this, LocationForegroundService::class.java).apply {
                             action = LocationForegroundService.ACTION_START

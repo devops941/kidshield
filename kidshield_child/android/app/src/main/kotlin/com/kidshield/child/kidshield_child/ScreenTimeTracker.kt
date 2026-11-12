@@ -113,7 +113,9 @@ object ScreenTimeTracker {
         val todayApps: List<Map<String, Any>>,
         val weeklyApps: List<Map<String, Any>>,
         val monthlyApps: List<Map<String, Any>>,
-        val hourlyBreakdown: List<Int> = emptyList()
+        val hourlyBreakdown: List<Int> = emptyList(),
+        val weeklyBreakdown: List<Int> = emptyList(),
+        val monthlyBreakdown: List<Int> = emptyList()
     )
 
     /**
@@ -200,17 +202,40 @@ object ScreenTimeTracker {
             }
         } catch (_: Exception) {}
 
-        // 4c. Query UsageEvents strictly for launch counts
+        // 4c. Query UsageEvents to capture launch counts AND live ongoing sessions for the active app
         try {
             val events = usm.queryEvents(todayStart, now)
             val event = UsageEvents.Event()
+            var lastResumedPkg: String? = null
+            var lastResumedTime = 0L
+
             while (events.hasNextEvent()) {
                 events.getNextEvent(event)
                 val pkg = event.packageName ?: continue
                 if (isExcluded(pkg, context)) continue
+
                 if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED ||
                     @Suppress("DEPRECATION") (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND)) {
                     packageLaunchCountMap[pkg] = (packageLaunchCountMap[pkg] ?: 0) + 1
+                    lastResumedPkg = pkg
+                    lastResumedTime = event.timeStamp
+                } else if (event.eventType == UsageEvents.Event.ACTIVITY_PAUSED ||
+                    event.eventType == UsageEvents.Event.ACTIVITY_STOPPED ||
+                    @Suppress("DEPRECATION") (event.eventType == UsageEvents.Event.MOVE_TO_BACKGROUND)) {
+                    if (pkg == lastResumedPkg) {
+                        lastResumedPkg = null
+                        lastResumedTime = 0L
+                    }
+                }
+            }
+
+            // If an app is STILL currently open & being used in foreground right now!
+            if (lastResumedPkg != null && lastResumedTime > 0L && now > lastResumedTime) {
+                val ongoingSessionMs = now - lastResumedTime
+                if (ongoingSessionMs in 1000L..14400000L) { // between 1s and 4 hours
+                    val prev = packageTodayTimeMap[lastResumedPkg] ?: 0L
+                    packageTodayTimeMap[lastResumedPkg] = prev + ongoingSessionMs
+                    Log.d(TAG, "Added live ongoing session for $lastResumedPkg: ${ongoingSessionMs / 1000}s")
                 }
             }
         } catch (_: Exception) {}
@@ -316,6 +341,9 @@ object ScreenTimeTracker {
             hourlyBuckets[curBlock] = totalMinutesToday
         }
 
+        val weeklyBreakdown = computeWeeklyBreakdown(context, now, usm)
+        val monthlyBreakdown = computeMonthlyBreakdown(context, now, usm)
+
         val report = ScreenTimeReport(
             date = dateKey,
             timezone = "Asia/Kolkata",
@@ -325,13 +353,96 @@ object ScreenTimeTracker {
             todayApps = todayApps,
             weeklyApps = weeklyApps,
             monthlyApps = monthlyApps,
-            hourlyBreakdown = hourlyBuckets.toList()
+            hourlyBreakdown = hourlyBuckets.toList(),
+            weeklyBreakdown = weeklyBreakdown,
+            monthlyBreakdown = monthlyBreakdown
         )
 
         // Save locally for offline reliability
         persistReportLocally(context, report)
 
         return report
+    }
+
+    private fun computeWeeklyBreakdown(context: Context, now: Long, usm: UsageStatsManager): List<Int> {
+        val cal = Calendar.getInstance(REPORTING_TIMEZONE).apply {
+            timeInMillis = now
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val dayOfWeek = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7 // 0 = Mon, 6 = Sun
+        val mondayCal = Calendar.getInstance(REPORTING_TIMEZONE).apply {
+            timeInMillis = cal.timeInMillis
+            add(Calendar.DAY_OF_YEAR, -dayOfWeek)
+        }
+
+        val result = ArrayList<Int>()
+        for (i in 0 until 7) {
+            val dayStartCal = Calendar.getInstance(REPORTING_TIMEZONE).apply {
+                timeInMillis = mondayCal.timeInMillis
+                add(Calendar.DAY_OF_YEAR, i)
+            }
+            val startMs = dayStartCal.timeInMillis
+            val endMs = Math.min(now, startMs + 86400000L)
+            if (startMs > now) {
+                result.add(0)
+                continue
+            }
+            var dayTotalMs = 0L
+            try {
+                val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startMs, endMs)
+                if (stats != null) {
+                    for (u in stats) {
+                        val pkg = u.packageName ?: continue
+                        if (!isExcluded(pkg, context)) {
+                            dayTotalMs += u.totalTimeInForeground
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+            result.add((dayTotalMs / 60000L).toInt())
+        }
+        return result
+    }
+
+    private fun computeMonthlyBreakdown(context: Context, now: Long, usm: UsageStatsManager): List<Int> {
+        val result = ArrayList<Int>()
+        for (w in 0 until 4) {
+            val calStart = Calendar.getInstance(REPORTING_TIMEZONE).apply {
+                timeInMillis = now
+                add(Calendar.DAY_OF_YEAR, -(4 - w) * 7)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val calEnd = Calendar.getInstance(REPORTING_TIMEZONE).apply {
+                timeInMillis = now
+                add(Calendar.DAY_OF_YEAR, -(3 - w) * 7)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val startMs = calStart.timeInMillis
+            val endMs = Math.min(now, calEnd.timeInMillis)
+            var weekTotalMs = 0L
+            try {
+                val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_WEEKLY, startMs, endMs)
+                if (stats != null) {
+                    for (u in stats) {
+                        val pkg = u.packageName ?: continue
+                        if (!isExcluded(pkg, context)) {
+                            weekTotalMs += u.totalTimeInForeground
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+            result.add((weekTotalMs / 60000L).toInt())
+        }
+        return result
     }
 
     /**
@@ -419,7 +530,7 @@ object ScreenTimeTracker {
             return
         }
 
-        val baseUrl = if (!baseUrlParam.isNullOrEmpty()) baseUrlParam else "http://192.168.1.9:5000/api"
+        val baseUrl = if (!baseUrlParam.isNullOrEmpty()) baseUrlParam else "http://192.168.1.18:5000/api"
 
         val report = computeScreenTimeReport(context) ?: return
 
@@ -448,6 +559,12 @@ object ScreenTimeTracker {
             val hourlyArray = JSONArray()
             for (h in report.hourlyBreakdown) hourlyArray.put(h)
 
+            val weeklyArray = JSONArray()
+            for (w in report.weeklyBreakdown) weeklyArray.put(w)
+
+            val monthlyArray = JSONArray()
+            for (m in report.monthlyBreakdown) monthlyArray.put(m)
+
             val payload = JSONObject().apply {
                 put("childId", childId)
                 put("date", report.date)
@@ -455,6 +572,8 @@ object ScreenTimeTracker {
                 put("totalMinutesToday", report.totalMinutesToday)
                 put("usageData", appsArray)
                 put("hourlyBreakdown", hourlyArray)
+                put("weeklyBreakdown", weeklyArray)
+                put("monthlyBreakdown", monthlyArray)
             }
 
             val endpoint = URL("$baseUrl/app-usage/sync")

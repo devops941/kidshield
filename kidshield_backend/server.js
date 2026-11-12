@@ -77,7 +77,7 @@ if (!process.env.VERCEL) {
     console.log(`====================================================`);
     console.log(`  🛡️  KIDSHIELD REST API SERVER RUNNING            `);
     console.log(`  🚀 Port: http://0.0.0.0:${PORT}                   `);
-    console.log(`  📡 LAN:  http://192.168.1.9:${PORT}               `);
+    console.log(`  📡 LAN:  http://192.168.1.18:${PORT}               `);
     console.log(`  📡 Mode: ${process.env.NODE_ENV || 'development'} `);
     console.log(`====================================================`);
   });

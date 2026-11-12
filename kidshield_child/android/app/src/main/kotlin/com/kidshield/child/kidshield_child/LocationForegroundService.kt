@@ -57,7 +57,7 @@ class LocationForegroundService : Service(), LocationListener {
     }
 
     private var childId: String = ""
-    private var baseUrl: String = "http://192.168.1.9:5000/api"
+    private var baseUrl: String = "http://192.168.1.18:5000/api"
 
     private lateinit var locationManager: LocationManager
     private val executor = Executors.newSingleThreadExecutor()
@@ -90,13 +90,9 @@ class LocationForegroundService : Service(), LocationListener {
             // Real-time schedule boundary check (Study Mode / Bedtime alerts)
             AppBlockManager.checkScheduleAndNotify(applicationContext)
 
-            // Periodic screen time background synchronization every 60 seconds (every 2 ticks)
-            screenTimeTickCounter++
-            if (screenTimeTickCounter >= 2) {
-                screenTimeTickCounter = 0
-                executor.execute {
-                    ScreenTimeTracker.syncUsageInBackground(applicationContext, childId, baseUrl)
-                }
+            // Periodic screen time background synchronization every 30 seconds
+            executor.execute {
+                ScreenTimeTracker.syncUsageInBackground(applicationContext, childId, baseUrl)
             }
 
             mainHandler.postDelayed(this, 30000L) // Every 30 seconds

@@ -67,8 +67,8 @@ class _PairDeviceScreenState extends State<PairDeviceScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final pairingPayload =
-        '{"app":"kidshield","childId":"${widget.child.id}","pairingCode":"$_currentCode","parentId":"${widget.child.parentId}"}';
+    // Short payload makes QR modules large, crisp, and 10x easier to scan phone-to-phone
+    final pairingPayload = _currentCode;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,

@@ -135,9 +135,18 @@ class MonitoringProvider extends ChangeNotifier {
     }
     final todayWeekday = DateTime.now().weekday; // 1 = Monday, 7 = Sunday
     final todayMinutes = totalScreenTimeMinutesToday.toDouble();
+    final weeklyTotal = totalScreenTimeMinutesWeekly.toDouble();
     final days = List<double>.filled(7, 0.0);
     final todayIndex = (todayWeekday - 1).clamp(0, 6);
     days[todayIndex] = todayMinutes;
+
+    final diff = weeklyTotal - todayMinutes;
+    if (diff > 0 && todayIndex > 0) {
+      final perDay = diff / todayIndex;
+      for (int i = 0; i < todayIndex; i++) {
+        days[i] = perDay;
+      }
+    }
     return days;
   }
 
@@ -145,8 +154,18 @@ class MonitoringProvider extends ChangeNotifier {
     if (_backendMonthlyBreakdown.isNotEmpty && _backendMonthlyBreakdown.length == 4) {
       return _backendMonthlyBreakdown;
     }
+    final weeklyTotal = totalScreenTimeMinutesWeekly.toDouble();
+    final monthlyTotal = totalScreenTimeMinutesMonthly.toDouble();
     final result = List<double>.filled(4, 0.0);
-    result[3] = totalScreenTimeMinutesWeekly.toDouble();
+    result[3] = weeklyTotal;
+
+    final diff = monthlyTotal - weeklyTotal;
+    if (diff > 0) {
+      final perWeek = diff / 3;
+      result[0] = perWeek;
+      result[1] = perWeek;
+      result[2] = perWeek;
+    }
     return result;
   }
 
