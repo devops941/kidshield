@@ -530,7 +530,7 @@ object ScreenTimeTracker {
             return
         }
 
-        val baseUrl = if (!baseUrlParam.isNullOrEmpty()) baseUrlParam else "http://192.168.1.18:5000/api"
+        val baseUrl = if (!baseUrlParam.isNullOrEmpty()) baseUrlParam else "https://kidshield-1jvi.onrender.com/api"
 
         val report = computeScreenTimeReport(context) ?: return
 

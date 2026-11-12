@@ -57,7 +57,7 @@ class LocationForegroundService : Service(), LocationListener {
     }
 
     private var childId: String = ""
-    private var baseUrl: String = "http://192.168.1.18:5000/api"
+    private var baseUrl: String = "https://kidshield-1jvi.onrender.com/api"
 
     private lateinit var locationManager: LocationManager
     private val executor = Executors.newSingleThreadExecutor()

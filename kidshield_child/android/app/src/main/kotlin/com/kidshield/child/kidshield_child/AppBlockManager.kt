@@ -211,7 +211,7 @@ object AppBlockManager {
         } else if (!savedBaseUrl.isNullOrEmpty()) {
             savedBaseUrl
         } else {
-            "http://192.168.1.18:5000/api"
+            "https://kidshield-1jvi.onrender.com/api"
         }
 
         if (childId.isEmpty()) {

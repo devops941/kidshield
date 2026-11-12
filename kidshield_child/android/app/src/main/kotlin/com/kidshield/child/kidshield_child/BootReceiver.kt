@@ -31,14 +31,14 @@ class BootReceiver : BroadcastReceiver() {
                     val serviceIntent = Intent(context, LocationForegroundService::class.java).apply {
                         this.action = LocationForegroundService.ACTION_START
                         putExtra(LocationForegroundService.EXTRA_CHILD_ID, childId)
-                        putExtra(LocationForegroundService.EXTRA_BASE_URL, "http://192.168.1.18:5000/api")
+                        putExtra(LocationForegroundService.EXTRA_BASE_URL, "https://kidshield-1jvi.onrender.com/api")
                     }
                     ContextCompat.startForegroundService(context, serviceIntent)
                     Log.i(TAG, "LocationForegroundService started successfully after boot.")
 
                     // Initial post-boot screen time tracking and synchronization
                     Thread {
-                        ScreenTimeTracker.syncUsageInBackground(context, childId, "http://192.168.1.18:5000/api")
+                        ScreenTimeTracker.syncUsageInBackground(context, childId, "https://kidshield-1jvi.onrender.com/api")
                     }.start()
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to start LocationForegroundService on boot: ${e.message}", e)

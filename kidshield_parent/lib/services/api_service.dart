@@ -10,13 +10,10 @@ class ApiService {
   static String _customBaseUrl = '';
   static void setBaseUrl(String url) => _customBaseUrl = url;
 
-  // For Android real phone on same Wi-Fi, use PC IP 192.168.1.18. For Web/Chrome use localhost.
+  // Production Render Cloud Backend API
   static String get baseUrl {
     if (_customBaseUrl.isNotEmpty) return _customBaseUrl;
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://192.168.1.18:5000/api';
-    }
-    return 'http://localhost:5000/api';
+    return 'https://kidshield-1jvi.onrender.com/api';
   }
 
   String? _jwtToken;

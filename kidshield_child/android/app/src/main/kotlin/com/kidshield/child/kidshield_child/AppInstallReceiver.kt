@@ -85,7 +85,7 @@ class AppInstallReceiver : BroadcastReceiver() {
                 val targetEndpoint = if (!savedBaseUrl.isNullOrEmpty()) {
                     "${savedBaseUrl.trimEnd('/')}/installed-apps/sync"
                 } else {
-                    "http://192.168.1.18:5000/api/installed-apps/sync"
+                    "https://kidshield-1jvi.onrender.com/api/installed-apps/sync"
                 }
                 val url = URL(targetEndpoint)
                 val conn = (url.openConnection() as HttpURLConnection).apply {
