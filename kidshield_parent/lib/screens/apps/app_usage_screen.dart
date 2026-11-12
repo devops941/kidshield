@@ -849,53 +849,81 @@ class _AppUsageScreenState extends State<AppUsageScreen> with SingleTickerProvid
                         ),
                       ),
                       SizedBox(width: 8.w),
-                      // Block / Allow status & toggle
-                      InkWell(
-                        onTap: () async {
-                          final newStatus = !app.isBlocked;
-                          await monitoringProvider.toggleAppBlock(selectedChild.id, app.packageName, newStatus);
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(newStatus ? 'Blocked ${app.appName}' : 'Unblocked ${app.appName}'),
-                                duration: const Duration(seconds: 2),
+                      // Modern Toggle Switch + Status Pill
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Status Badge
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.5.h),
+                            decoration: BoxDecoration(
+                              color: app.isBlocked
+                                  ? AppColors.danger.withValues(alpha: 0.1)
+                                  : AppColors.success.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12.r),
+                              border: Border.all(
+                                color: app.isBlocked
+                                    ? AppColors.danger.withValues(alpha: 0.35)
+                                    : AppColors.success.withValues(alpha: 0.35),
+                                width: 1,
                               ),
-                            );
-                          }
-                        },
-                        borderRadius: BorderRadius.circular(8.r),
-                        child: Container(
-                          padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-                          decoration: BoxDecoration(
-                            color: app.isBlocked
-                                ? AppColors.danger.withValues(alpha: 0.12)
-                                : AppColors.success.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(8.r),
-                            border: Border.all(
-                              color: app.isBlocked ? AppColors.danger : AppColors.success,
-                              width: 1,
                             ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                app.isBlocked ? Icons.block_rounded : Icons.check_circle_outline_rounded,
-                                size: 14.r,
-                                color: app.isBlocked ? AppColors.danger : AppColors.success,
-                              ),
-                              SizedBox(width: 4.w),
-                              Text(
-                                app.isBlocked ? 'Blocked' : 'Allowed',
-                                style: TextStyle(
-                                  fontSize: 11.sp,
-                                  fontWeight: FontWeight.bold,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  app.isBlocked ? Icons.lock_rounded : Icons.check_circle_rounded,
+                                  size: 11.r,
                                   color: app.isBlocked ? AppColors.danger : AppColors.success,
                                 ),
-                              ),
-                            ],
+                                SizedBox(width: 3.5.w),
+                                Text(
+                                  app.isBlocked ? 'Blocked' : 'Allowed',
+                                  style: TextStyle(
+                                    fontSize: 10.5.sp,
+                                    fontWeight: FontWeight.w700,
+                                    color: app.isBlocked ? AppColors.danger : AppColors.success,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
+                          SizedBox(width: 2.w),
+                          // iOS/Android Adaptive Toggle Switch
+                          Transform.scale(
+                            scale: 0.78,
+                            child: Switch.adaptive(
+                              value: !app.isBlocked,
+                              activeColor: AppColors.success,
+                              activeTrackColor: AppColors.success.withValues(alpha: 0.38),
+                              inactiveThumbColor: AppColors.danger,
+                              inactiveTrackColor: AppColors.danger.withValues(alpha: 0.3),
+                              onChanged: (bool isAllowed) async {
+                                final newBlockedStatus = !isAllowed;
+                                await monitoringProvider.toggleAppBlock(
+                                  selectedChild.id,
+                                  app.packageName,
+                                  newBlockedStatus,
+                                );
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        newBlockedStatus
+                                            ? '🔒 Blocked ${app.appName} on child device'
+                                            : '✅ Allowed ${app.appName} for child',
+                                      ),
+                                      backgroundColor:
+                                          newBlockedStatus ? AppColors.danger : AppColors.success,
+                                      behavior: SnackBarBehavior.floating,
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
