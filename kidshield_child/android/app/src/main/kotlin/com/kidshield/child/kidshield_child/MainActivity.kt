@@ -165,6 +165,11 @@ class MainActivity : FlutterActivity() {
 
                     val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
                     val batteryIgnored = powerManager.isIgnoringBatteryOptimizations(packageName)
+                    val overlayGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        Settings.canDrawOverlays(this)
+                    } else {
+                        true
+                    }
 
                     val map = HashMap<String, Any>()
                     map["location"] = locGranted
@@ -172,6 +177,7 @@ class MainActivity : FlutterActivity() {
                     map["usage"] = usageGranted
                     map["notification"] = notifGranted
                     map["batteryOptimization"] = batteryIgnored
+                    map["overlay"] = overlayGranted
                     result.success(map)
                 }
                 "requestLocationPermission" -> {
@@ -256,6 +262,38 @@ class MainActivity : FlutterActivity() {
                             result.success(true)
                         } catch (e: Exception) {
                             result.error("BATTERY_SETTINGS_ERROR", e.localizedMessage, null)
+                        }
+                    }
+                }
+                "checkOverlayPermission" -> {
+                    val overlayGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        Settings.canDrawOverlays(this)
+                    } else {
+                        true
+                    }
+                    result.success(overlayGranted)
+                }
+                "requestOverlayPermission" -> {
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                            val intent = Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:$packageName")
+                            ).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            startActivity(intent)
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        try {
+                            val fallbackIntent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            startActivity(fallbackIntent)
+                            result.success(true)
+                        } catch (e2: Exception) {
+                            result.error("OVERLAY_ERROR", e2.localizedMessage, null)
                         }
                     }
                 }

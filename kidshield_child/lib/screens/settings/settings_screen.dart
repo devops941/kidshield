@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
 import '../../providers/child_auth_provider.dart';
+import '../../services/permission_service.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../pairing/welcome_screen.dart';
 
@@ -113,6 +114,13 @@ class SettingsScreen extends StatelessWidget {
                 subtitle: 'Active (Important alerts from parents)',
                 trailing: Icon(Icons.check_circle_rounded, color: AppColors.mintGreen, size: 20.r),
               ),
+              _buildSettingTile(
+                icon: Icons.lock_person_rounded,
+                title: 'App Lock & Screen Protection',
+                subtitle: 'Tap to configure "Appear on Top" overlay',
+                trailing: Icon(Icons.arrow_forward_ios_rounded, color: AppColors.electricCyan, size: 14.r),
+                onTap: () => PermissionService().requestOverlayPermission(),
+              ),
               SizedBox(height: 16.h),
 
               // About & Support Section
@@ -208,53 +216,58 @@ class SettingsScreen extends StatelessWidget {
     required String title,
     required String subtitle,
     Widget? trailing,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 10.h),
-      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
-      decoration: BoxDecoration(
-        color: const Color(0xFF09142E),
-        borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(
-          color: AppColors.electricCyan.withValues(alpha: 0.25),
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        margin: EdgeInsets.only(bottom: 10.h),
+        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
+        decoration: BoxDecoration(
+          color: const Color(0xFF09142E),
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(
+            color: AppColors.electricCyan.withValues(alpha: 0.25),
+          ),
         ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: EdgeInsets.all(8.r),
-            decoration: BoxDecoration(
-              color: AppColors.electricCyan.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10.r),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(8.r),
+              decoration: BoxDecoration(
+                color: AppColors.electricCyan.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10.r),
+              ),
+              child: Icon(icon, color: AppColors.electricCyan, size: 20.r),
             ),
-            child: Icon(icon, color: AppColors.electricCyan, size: 20.r),
-          ),
-          SizedBox(width: 12.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 13.5.sp,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
+            SizedBox(width: 12.w),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13.5.sp,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
                   ),
-                ),
-                SizedBox(height: 2.h),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 11.sp,
-                    color: AppColors.textSecondary,
+                  SizedBox(height: 2.h),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 11.sp,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          trailing ?? const SizedBox.shrink(),
-        ],
+            trailing ?? const SizedBox.shrink(),
+          ],
+        ),
       ),
     );
   }

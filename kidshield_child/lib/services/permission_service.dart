@@ -20,6 +20,7 @@ class PermissionService {
           'usage': (res['usage'] as bool?) ?? false,
           'notification': (res['notification'] as bool?) ?? false,
           'batteryOptimization': (res['batteryOptimization'] as bool?) ?? false,
+          'overlay': (res['overlay'] as bool?) ?? false,
         };
       }
     } catch (_) {}
@@ -29,6 +30,7 @@ class PermissionService {
       'usage': false,
       'notification': false,
       'batteryOptimization': false,
+      'overlay': false,
     };
   }
 
@@ -66,6 +68,26 @@ class PermissionService {
   Future<bool> requestBatteryOptimization() async {
     try {
       final res = await _channel.invokeMethod<bool>('requestBatteryOptimization');
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Requests Android "Display over other apps" (Appear on Top) overlay permission
+  Future<bool> requestOverlayPermission() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('requestOverlayPermission');
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Checks if Android "Display over other apps" is granted
+  Future<bool> checkOverlayPermission() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('checkOverlayPermission');
       return res ?? false;
     } catch (_) {
       return false;

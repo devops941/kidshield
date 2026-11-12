@@ -7,9 +7,11 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import org.json.JSONArray
@@ -132,29 +134,53 @@ object AppBlockManager {
      */
     fun launchBlockScreen(context: Context, packageName: String) {
         try {
-            // 1. Send Home intent to immediately kick the blocked app out of foreground
+            // 1. Kick the blocked app out to Home immediately
             val homeIntent = Intent(Intent.ACTION_MAIN).apply {
                 addCategory(Intent.CATEGORY_HOME)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
             }
-            context.startActivity(homeIntent)
+            try {
+                context.startActivity(homeIntent)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to launch homeIntent: ${e.message}")
+            }
 
             // 2. Launch the full-screen KidShield AppBlockActivity
             val blockIntent = Intent(context, AppBlockActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                 putExtra(AppBlockActivity.EXTRA_PACKAGE_NAME, packageName)
             }
 
-            // Small delay so home intent minimizes target before block screen displays
-            mainHandler.postDelayed({
+            val hasOverlay = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Settings.canDrawOverlays(context)
+            } else {
+                true
+            }
+
+            if (hasOverlay) {
+                // If overlay permission granted, launch block screen directly over the restricted app!
                 try {
                     context.startActivity(blockIntent)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to start AppBlockActivity directly: ${e.message}")
-                    // Fallback to Fullscreen Intent Notification for strict Android 10+ background limitations
+                    Log.e(TAG, "Failed direct block activity launch: ${e.message}")
                     launchViaFullScreenNotification(context, blockIntent, packageName)
                 }
-            }, 100L)
+            } else {
+                // If overlay not yet granted, open system settings so parent/child enables it + notification
+                try {
+                    val overlayIntent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:${context.packageName}")
+                    ).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(overlayIntent)
+                } catch (_: Exception) {}
+                launchViaFullScreenNotification(context, blockIntent, packageName)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed in launchBlockScreen: ${e.message}", e)
         }

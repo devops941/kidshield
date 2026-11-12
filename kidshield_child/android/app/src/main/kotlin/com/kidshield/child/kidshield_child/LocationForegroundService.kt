@@ -75,27 +75,27 @@ class LocationForegroundService : Service(), LocationListener {
     private val appLockWatchdogRunnable = object : Runnable {
         override fun run() {
             checkForegroundAppAndEnforceLock()
-            appLockHandler.postDelayed(this, 750L) // Real-time 750ms watchdog
+            appLockHandler.postDelayed(this, 350L) // Real-time 350ms watchdog
         }
     }
 
-    // Periodic sync runnable ensures updates every 30 seconds even when device is stationary
+    // Periodic sync runnable ensures updates every 15 seconds even when device is stationary
     private val periodicSyncRunnable = object : Runnable {
         override fun run() {
             queryAndUploadCurrentLocation()
 
-            // Periodic restrictions sync from parent console every 30 seconds
+            // Periodic restrictions sync from parent console every 15 seconds
             AppBlockManager.syncRestrictions(applicationContext, childId, baseUrl)
 
             // Real-time schedule boundary check (Study Mode / Bedtime alerts)
             AppBlockManager.checkScheduleAndNotify(applicationContext)
 
-            // Periodic screen time background synchronization every 30 seconds
+            // Periodic screen time background synchronization
             executor.execute {
                 ScreenTimeTracker.syncUsageInBackground(applicationContext, childId, baseUrl)
             }
 
-            mainHandler.postDelayed(this, 30000L) // Every 30 seconds
+            mainHandler.postDelayed(this, 15000L) // Every 15 seconds
         }
     }
 
@@ -374,7 +374,7 @@ class LocationForegroundService : Service(), LocationListener {
             if (!currentForegroundPackage.isNullOrEmpty()) {
                 // If package is blocked and not KidShield itself
                 if (currentForegroundPackage != packageName && AppBlockManager.isBlocked(applicationContext, currentForegroundPackage)) {
-                    val isRecentDuplicate = (currentForegroundPackage == lastBlockedPkgShown) && (now - lastBlockedPkgTime < 2500L)
+                    val isRecentDuplicate = (currentForegroundPackage == lastBlockedPkgShown) && (now - lastBlockedPkgTime < 800L)
                     if (!isRecentDuplicate) {
                         lastBlockedPkgShown = currentForegroundPackage
                         lastBlockedPkgTime = now

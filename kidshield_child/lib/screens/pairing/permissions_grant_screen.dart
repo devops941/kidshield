@@ -26,6 +26,7 @@ class _PermissionsGrantScreenState extends State<PermissionsGrantScreen> with Wi
   bool _usageGranted = false;
   bool _notificationsGranted = false;
   bool _batteryOptGranted = false;
+  bool _overlayGranted = false;
 
   @override
   void initState() {
@@ -56,6 +57,7 @@ class _PermissionsGrantScreenState extends State<PermissionsGrantScreen> with Wi
       _usageGranted = perms['usage'] ?? false;
       _notificationsGranted = perms['notification'] ?? false;
       _batteryOptGranted = perms['batteryOptimization'] ?? false;
+      _overlayGranted = perms['overlay'] ?? false;
     });
   }
 
@@ -154,6 +156,16 @@ class _PermissionsGrantScreenState extends State<PermissionsGrantScreen> with Wi
     }
   }
 
+  Future<void> _handleOverlayToggle(bool val) async {
+    if (val && !_overlayGranted) {
+      await _permissionService.requestOverlayPermission();
+      await Future.delayed(const Duration(milliseconds: 600));
+      _refreshPermissions();
+    } else if (!val && _overlayGranted) {
+      _showSettingsDialog('Appear on Top (App Lock)');
+    }
+  }
+
   Future<void> _onContinue() async {
     setState(() => _isSyncing = true);
 
@@ -240,6 +252,17 @@ class _PermissionsGrantScreenState extends State<PermissionsGrantScreen> with Wi
                           icon: Icons.battery_charging_full_rounded,
                           isGranted: _batteryOptGranted,
                           onToggle: _handleBatteryToggle,
+                        ),
+
+                        // Card 5: Appear on Top / Real-Time App Lock Overlay
+                        PermissionCard(
+                          title: 'App Lock & Screen Protection',
+                          description: _overlayGranted
+                              ? 'Active • Unapproved and restricted apps will be locked.'
+                              : 'Required • Tap to allow Appear on Top to block restricted apps.',
+                          icon: Icons.lock_person_rounded,
+                          isGranted: _overlayGranted,
+                          onToggle: _handleOverlayToggle,
                         ),
                         SizedBox(height: 14.h),
 
