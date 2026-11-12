@@ -28,10 +28,11 @@ class _ScanQrScreenState extends State<ScanQrScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _cameraController = MobileScannerController(
-      formats: const [BarcodeFormat.qrCode],
-      detectionSpeed: DetectionSpeed.noDuplicates,
+      detectionSpeed: DetectionSpeed.normal,
+      detectionTimeoutMs: 350,
       facing: CameraFacing.back,
       torchEnabled: false,
+      cameraResolution: const Size(1280, 720),
     );
 
     _laserController = AnimationController(
@@ -49,10 +50,12 @@ class _ScanQrScreenState extends State<ScanQrScreen> with SingleTickerProviderSt
 
   Future<void> _handleScannedCode(String rawCode) async {
     if (_isProcessing) return;
-    _isProcessing = true;
+    if (mounted) setState(() => _isProcessing = true);
 
     // Haptic feedback just like standard QR scanners (GPay/PhonePe)
-    HapticFeedback.mediumImpact();
+    try {
+      HapticFeedback.mediumImpact();
+    } catch (_) {}
 
     // Clean up code: Parent QR might send "KS-3683" or "{\"pairingCode\":\"KS-3683\"}" or plain JSON
     String cleanCode = rawCode.trim();
@@ -68,6 +71,8 @@ class _ScanQrScreenState extends State<ScanQrScreen> with SingleTickerProviderSt
     final match = RegExp(r'KS-[\dA-Za-z]+', caseSensitive: false).firstMatch(cleanCode);
     if (match != null) {
       cleanCode = match.group(0)!.toUpperCase();
+    } else if (RegExp(r'^\d{4}$').hasMatch(cleanCode)) {
+      cleanCode = 'KS-$cleanCode';
     }
 
     final auth = Provider.of<ChildAuthProvider>(context, listen: false);
@@ -80,7 +85,11 @@ class _ScanQrScreenState extends State<ScanQrScreen> with SingleTickerProviderSt
         MaterialPageRoute(builder: (_) => const PermissionsGrantScreen()),
       );
     } else {
-      _isProcessing = false;
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        if (mounted) {
+          setState(() => _isProcessing = false);
+        }
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(auth.errorMessage ?? 'Pairing failed. Please re-scan parent QR or enter code manually.'),
@@ -152,11 +161,14 @@ class _ScanQrScreenState extends State<ScanQrScreen> with SingleTickerProviderSt
                           // 1. Real Camera Feed
                           MobileScanner(
                             controller: _cameraController,
+                            fit: BoxFit.cover,
                             onDetect: (capture) {
+                              if (_isProcessing) return;
                               final List<Barcode> barcodes = capture.barcodes;
                               for (final barcode in barcodes) {
-                                if (barcode.rawValue != null && barcode.rawValue!.isNotEmpty) {
-                                  _handleScannedCode(barcode.rawValue!);
+                                final val = barcode.rawValue ?? barcode.displayValue;
+                                if (val != null && val.trim().isNotEmpty) {
+                                  _handleScannedCode(val);
                                   break;
                                 }
                               }

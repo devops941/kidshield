@@ -120,14 +120,16 @@ class _PairDeviceScreenState extends State<PairDeviceScreen> {
                     QrImageView(
                       data: pairingPayload,
                       version: QrVersions.auto,
-                      size: 200.0,
+                      size: 210.0,
+                      backgroundColor: Colors.white,
+                      padding: const EdgeInsets.all(12),
                       eyeStyle: const QrEyeStyle(
                         eyeShape: QrEyeShape.square,
-                        color: AppColors.navyDark,
+                        color: Colors.black,
                       ),
                       dataModuleStyle: const QrDataModuleStyle(
                         dataModuleShape: QrDataModuleShape.square,
-                        color: AppColors.navyDark,
+                        color: Colors.black,
                       ),
                     ),
                     SizedBox(height: 16.h),
